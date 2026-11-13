@@ -6,6 +6,8 @@ Run `./scripts/build.ps1 -Integration`. The executable test harness exits nonzer
 
 `--integration` checks the actual cursor image, composition clock, opacity/style restoration and all thirteen module lifecycles. It pumps native messages and verifies resource cleanup, calling Stop twice. Weather networking is denied. The local OS did not retain the topmost bit on the test window; this remains a manual acceptance gap, not a claimed pass. WPF-managed windows can override native styles.
 
+Hosted Windows runners can have no live cursor handle. In that case the cursor-image check explicitly loads the stock Windows arrow and exercises the same native image/hotspot conversion and cleanup; it does not claim live mouse testing on a headless runner. Local runs use the actual current cursor when available.
+
 `--glide-integration` is the optional real-wheel regression test. It requires a quiet mouse and standalone Glide closed. It covers distance, speed, horizontal output, precision/tagged input bypass, pause, exclusions, fullscreen, pointer-leave cancellation and maximized windows. Run `./scripts/build.ps1 -ScrollInputTests` locally. Pointer/focus are restored. The final local run passed. It is separate from headless CI.
 
 `Nexus.exe --smoke <output-directory>` runs the hub with isolated settings, renders its screens/editors, writes PNGs and `smoke-result.json`, then exits. CI in qemvix/nexus runs build/analyzer/type checks, regression/native lifecycle tests, formatting, packaging and startup smoke. Consult the actual Actions run for its remote status; local success is not a substitute.

@@ -73,6 +73,7 @@ internal sealed class CursorImageCache
     [StructLayout(LayoutKind.Sequential)] internal struct CursorInfo { internal int Size, Flags; internal nint Handle; internal Native.Point Position; }
     [StructLayout(LayoutKind.Sequential)] private struct IconInfo { [MarshalAs(UnmanagedType.Bool)] internal bool Icon; internal uint X, Y; internal nint Mask, Color; }
     [DllImport("user32.dll")][return: MarshalAs(UnmanagedType.Bool)] internal static extern bool GetCursorInfo(ref CursorInfo info);
+    [DllImport("user32.dll", EntryPoint = "LoadCursorW")] internal static extern nint LoadCursor(nint instance, nint name);
     [DllImport("user32.dll")][return: MarshalAs(UnmanagedType.Bool)] private static extern bool GetIconInfo(nint icon, out IconInfo info);
     private nint _handle;
     private string _tint = "";
