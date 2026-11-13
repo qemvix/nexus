@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType><AssemblyName>Nexus</AssemblyName><ApplicationManifest>app.manifest</ApplicationManifest><ApplicationIcon>Assets/nexus.ico</ApplicationIcon>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="Assets/nexus.ico" />
+    <ProjectReference Include="../../packages/cursor-mouse/Nexus.Cursor.csproj" />
+    <ProjectReference Include="../../packages/desktop-customization/Nexus.Desktop.csproj" />
+    <ProjectReference Include="../../packages/productivity/Nexus.Productivity.csproj" />
+  </ItemGroup>
+</Project>

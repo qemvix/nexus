@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><IsTestProject>false</IsTestProject></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../apps/desktop/Nexus.csproj" />
+  </ItemGroup>
+</Project>

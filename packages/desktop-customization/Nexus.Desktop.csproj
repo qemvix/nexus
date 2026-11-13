@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><AssemblyName>Nexus.Desktop</AssemblyName><PackageId>nexus-desktop</PackageId></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../core/Nexus.Core.csproj" /></ItemGroup>
+</Project>
