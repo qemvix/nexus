@@ -1,8 +1,8 @@
 # Roadmap
 
-## 0.1 preview — delivered foundation
+## 0.2 preview — delivered foundation
 
-Native Windows hub and twelve useful feature implementations; trusted module API and lifecycle; capability controls; hotkeys; local configuration and profiles; reduced motion; diagnostics; signed-update primitives; self-contained installer/portable build; tests and CI; documentation and rendered screenshots.
+Native Windows hub and thirteen useful feature implementations; trusted module API and lifecycle; capability controls; hotkeys; local configuration and profiles; reduced motion; diagnostics; signed-update primitives; self-contained installer/portable build; tests and CI; documentation and rendered screenshots.
 
 ## 0.2 — native reliability and richer controls
 

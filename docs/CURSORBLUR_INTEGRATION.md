@@ -1,0 +1,13 @@
+# CursorBlur and high-frame-rate overlays
+
+CursorBlur is a separate Nexus utility, not the soft halo option in Cursor Aura. It ports the actual cursor-image trail algorithm from [qemvix/CursorBlur](https://github.com/qemvix/CursorBlur), snapshot `f7b23aea9af72744f2832bd8883bec9911e3e195` / CursorBlur.cpp blob `d91d7442b489d0ec020f055edd3ab83371c571de`. The original C++ source is retained under `packages/cursor-mouse/Upstream/CursorBlur.cpp` for comparison. The upstream README also references obieFM/CursorBlur; provenance is retained rather than claiming the algorithm as original Nexus work.
+
+The C# port reads the real native cursor image and hotspot, caches each shape/tint, samples movement, interpolates cursor copies between points, applies speed-sensitive opacity and expires samples by age. Defaults match upstream: sensitivity 0.03, fade 50 ms, alpha 10 and white tint. It keeps the 500-sample bound and adds per-frame interpolation limits to avoid unbounded work after large pointer jumps. It clears when the cursor is hidden, stops for reduced motion, and never hides/replaces the real OS cursor. There is no C++ compiler/runtime installation requirement for this port.
+
+All shared overlays now use one `CompositionTarget.Rendering` subscription, rather than separate 12–30 FPS background timers. Settings offers 60, 90, 120, 144, 165 or 240 FPS targets. Fractional frame credit is preserved, so requesting 60 FPS on a 144 Hz clock does not accidentally round down to 48 FPS. Targets are not guarantees of frames actually presented by the monitor; the UI reports actual per-overlay drawing callback rates. Background load, capture cost, WPF composition and monitor refresh still apply.
+
+Cursor Lens no longer has its own 12 FPS/70 ms throttle. It samples once per shared frame on the pointer's monitor and reuses its capture surface and writable image, avoiding a new GDI bitmap/large pixel allocation per frame. Capture remains GDI-based and protected video/HDR/mixed-DPI behavior still needs hardware validation.
+
+The local frame-clock test on the 144 Hz display observed approximately 58–61 rendered callbacks per second at a 60 FPS target, and 81 FPS during a 144 FPS target run. This validates improvement under that test load, not guaranteed 144/240 FPS or every effect combination. Cursor-image capture, sample lifetime/bounds and module cleanup have automated checks. A broader run with all effects enabled remains manual acceptance work.
+
+References: [WPF per-frame rendering](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/graphics-multimedia/how-to-render-on-a-per-frame-interval-using-compositiontarget), [WPF rendering implementation](https://source.dot.net/presentationcore/System/Windows/Media/MediaContext.cs.html).

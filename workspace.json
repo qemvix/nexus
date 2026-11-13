@@ -1,0 +1,11 @@
+{
+  "name": "nexus",
+  "platform": "windows-x64",
+  "components": [
+    { "name": "nexus", "path": "apps/desktop", "project": "Nexus.csproj", "kind": "application" },
+    { "name": "nexus-core", "path": "packages/core", "project": "Nexus.Core.csproj", "kind": "library" },
+    { "name": "nexus-cursor", "path": "packages/cursor-mouse", "project": "Nexus.Cursor.csproj", "kind": "feature-family" },
+    { "name": "nexus-desktop", "path": "packages/desktop-customization", "project": "Nexus.Desktop.csproj", "kind": "feature-family" },
+    { "name": "nexus-productivity", "path": "packages/productivity", "project": "Nexus.Productivity.csproj", "kind": "feature-family" }
+  ]
+}

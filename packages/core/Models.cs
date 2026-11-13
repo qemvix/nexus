@@ -6,9 +6,9 @@ namespace Nexus.Core;
 [Flags]
 public enum Capability { None = 0, Mouse = 1, Keyboard = 2, Screen = 4, Clipboard = 8, Windows = 16, Network = 32 }
 public enum ModuleStatus { Available, Disabled, Running, Blocked, Faulted }
-public sealed record Manifest(string Id, string Name, string Category, string Description, Capability Permissions, int ApiVersion = 1, string Version = "0.1.0");
+public sealed record Manifest(string Id, string Name, string Category, string Description, Capability Permissions, int ApiVersion = 1, string Version = "0.2.0");
 public sealed record Option(string Key, string Label, double Min = 0, double Max = 100, string[]? Choices = null, bool IsText = false, bool IsToggle = false);
-public sealed record ScrollProfile(string Process, double Sensitivity = 1, bool Invert = false, double Momentum = 0.75);
+public sealed record ScrollProfile(string Process, double Sensitivity = 1, bool Invert = false, double Momentum = 0.75, int? GlideMilliseconds = null);
 public sealed record WindowZone(double X, double Y, double Width, double Height);
 
 /// <summary>Shared, typed feature configuration. Only fields declared by a feature's schema appear in its editor.</summary>
@@ -21,6 +21,14 @@ public sealed class ModuleOptions
     public double Zoom { get; set; } = 2;
     public double Sensitivity { get; set; } = 1;
     public double Momentum { get; set; } = 0.75;
+    public double GlideMilliseconds { get; set; } = 320;
+    public double BlurSensitivity { get; set; } = .03;
+    public double TrailFadeMilliseconds { get; set; } = 50;
+    public double TrailAlpha { get; set; } = 10;
+    public string CursorTint { get; set; } = "#FFFFFF";
+    public bool NativeTouchpad { get; set; } = true;
+    public bool PauseFullscreen { get; set; } = true;
+    public string ExcludedApps { get; set; } = "";
     public bool Invert { get; set; }
     public bool Sound { get; set; }
     public bool AlwaysOnTop { get; set; } = true;
@@ -37,12 +45,16 @@ public sealed class ModuleOptions
         Speed = Bound(Speed, .1, 5, 1); Duration = Bound(Duration, .1, 3, .55);
         Zoom = Bound(Zoom, 1.1, 8, 2); Sensitivity = Bound(Sensitivity, .1, 5, 1);
         Momentum = Bound(Momentum, 0, .95, .75);
+        GlideMilliseconds = Bound(GlideMilliseconds, 100, 700, 320);
+        BlurSensitivity = Bound(BlurSensitivity, .001, 1, .03); TrailFadeMilliseconds = Bound(TrailFadeMilliseconds, 1, 1000, 50); TrailAlpha = Bound(TrailAlpha, 1, 255, 10);
+        if (CursorTint is null || !System.Text.RegularExpressions.Regex.IsMatch(CursorTint, "^#[0-9A-Fa-f]{6}$")) CursorTint = "#FFFFFF";
+        ExcludedApps = (ExcludedApps ?? "")[..Math.Min(ExcludedApps?.Length ?? 0, 4096)];
         if (Accent is null || !System.Text.RegularExpressions.Regex.IsMatch(Accent, "^#[0-9A-Fa-f]{6}$")) Accent = "#A497FF";
         Mode = (Mode ?? "Glow")[..Math.Min(Mode?.Length ?? 4, 40)];
         Shape = Shape is "Square" ? "Square" : "Circle";
         Location = (Location ?? "51.5,-0.12")[..Math.Min(Location?.Length ?? 10, 100)];
         ScrollProfiles ??= [];
-        ScrollProfiles = ScrollProfiles.Take(100).Where(p => p is not null && !string.IsNullOrWhiteSpace(p.Process) && double.IsFinite(p.Sensitivity) && p.Sensitivity is >= .1 and <= 5 && p.Momentum is >= 0 and <= .95).ToList();
+        ScrollProfiles = ScrollProfiles.Take(100).Where(p => p is not null && !string.IsNullOrWhiteSpace(p.Process) && double.IsFinite(p.Sensitivity) && p.Sensitivity is >= .25 and <= 2.5 && p.Momentum is >= 0 and <= .95 && (p.GlideMilliseconds is null or >= 100 and <= 700)).ToList();
         Zones ??= [];
         Zones = Zones.Take(4).Where(z => z is not null && double.IsFinite(z.X) && double.IsFinite(z.Y) && double.IsFinite(z.Width) && double.IsFinite(z.Height) && z.X is >= 0 and < 1 && z.Y is >= 0 and < 1 && z.Width >= .1 && z.Height >= .1 && z.X + z.Width <= 1.001 && z.Y + z.Height <= 1.001).ToList();
     }
@@ -64,6 +76,7 @@ public sealed class AppConfig
 {
     public int SchemaVersion { get; set; } = 1;
     public bool ReducedMotion { get; set; }
+    public int OverlayFps { get; set; } = 60;
     public Capability Grants { get; set; }
     public Dictionary<string, ModuleState> Modules { get; set; } = [];
     public Dictionary<string, string> Hotkeys { get; set; } = [];
@@ -77,6 +90,7 @@ public sealed class AppConfig
     {
         if (SchemaVersion != 1) throw new InvalidDataException("This configuration requires a different Nexus version.");
         Modules ??= []; Hotkeys ??= []; Profiles ??= [];
+        OverlayFps = Math.Clamp(OverlayFps, 60, 240);
         if (Modules.Count > 100 || Profiles.Count > 50 || Hotkeys.Count > 100) throw new InvalidDataException("Configuration exceeds limits.");
         foreach (var state in Modules.Values)
         {

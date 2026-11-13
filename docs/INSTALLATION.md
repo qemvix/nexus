@@ -1,6 +1,6 @@
 # Installation, portable mode and removal
 
-1. Obtain the release installer from the repository owner's release assets. No live download URL is hardcoded because this repository has not been published.
+1. Obtain the supplied installer or build the source from the private [qemvix/nexus](https://github.com/qemvix/nexus) monorepo. CI also supplies build artifacts. Access requires your GitHub account.
 2. Review the release notes, publisher signature if present and hashes. The locally produced preview is unsigned.
 3. Open `Nexus-Setup.exe` and choose Install Nexus. The install destination is fixed to `%LOCALAPPDATA%\Programs\Nexus`; no elevation is needed.
 4. Launch from Start. Use Permissions and the module library to choose your features.

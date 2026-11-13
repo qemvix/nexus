@@ -1,6 +1,7 @@
 # Feature guides
 
 - [Cursor Aura](cursor-aura.md)
+- [CursorBlur](cursor-blur.md)
 - [ClickFX](click-fx.md)
 - [ScrollFlow](scroll-flow.md)
 - [Cursor Lens](cursor-lens.md)

@@ -34,7 +34,7 @@ public partial class App : System.Windows.Application
                     {
                         string directory = e.Args.SkipWhile(x => x != "--smoke").Skip(1).FirstOrDefault() ?? data; Directory.CreateDirectory(directory);
                         window.SaveScreenGallery(directory);
-                        File.WriteAllText(Path.Combine(directory, "smoke-result.json"), "{\"started\":true,\"modules\":12,\"nativeWpf\":true}");
+                        File.WriteAllText(Path.Combine(directory, "smoke-result.json"), System.Text.Json.JsonSerializer.Serialize(new { started = true, modules = window.ModuleCount, nativeWpf = true }));
                         window.Exit();
                     }
                     catch (Exception exception) { diagnostics.Log("smoke", exception); window.Exit(); Environment.ExitCode = 1; }

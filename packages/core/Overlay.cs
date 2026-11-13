@@ -1,13 +1,14 @@
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
-using System.Windows.Threading;
+using System.Diagnostics;
 using Forms = System.Windows.Forms;
 
 namespace Nexus.Core;
 
 public sealed class OverlayFrame(DrawingContext drawing, Rect bounds, Func<Native.Point, Point> point, double scale)
 {
+    public long FrameId => Overlay.FrameId;
     public DrawingContext Drawing { get; } = drawing;
     public Rect Bounds { get; } = bounds;
     public Point Point(int x, int y) => point(new() { X = x, Y = y });
@@ -26,38 +27,71 @@ public sealed class OverlayFrame(DrawingContext drawing, Rect bounds, Func<Nativ
 /// <summary>One transparent, non-activating, click-through window per monitor; no input interception.</summary>
 public sealed class Overlay : IDisposable
 {
+    private static readonly List<Overlay> Active = [];
+    private static TimeSpan _lastRendering = TimeSpan.MinValue;
+    private static double _frameCredit;
+    private static int _targetFrameRate = 60;
+    public static long FrameId { get; private set; }
+    public static int TargetFrameRate { get => _targetFrameRate; set => _targetFrameRate = Math.Clamp(value, 60, 240); }
+    public static string PerformanceSummary => $"Target: {TargetFrameRate} FPS · composition synchronized · {Active.Count} overlays\n" + string.Join("\n", Active.Select(x => $"{x._name}: {x._actualFps:F0} rendered FPS"));
     private readonly List<OverlayWindow> _windows = [];
-    private readonly DispatcherTimer _timer;
     private readonly Action<OverlayFrame> _paint;
+    private readonly string _name;
+    private readonly Stopwatch _measurement = Stopwatch.StartNew();
+    private int _frames;
+    private double _actualFps;
     private bool _disposed;
-    public Overlay(Action<OverlayFrame> paint, int fps = 30)
+    public Overlay(Action<OverlayFrame> paint, string name = "Overlay")
     {
-        _paint = paint; BuildWindows();
-        _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(1d / fps) };
-        _timer.Tick += Tick; _timer.Start();
+        _paint = paint; _name = name; BuildWindows();
+        if (Active.Count == 0) { _lastRendering = TimeSpan.MinValue; _frameCredit = 0; CompositionTarget.Rendering += RenderAll; }
+        Active.Add(this);
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged += DisplayChanged;
     }
     private void BuildWindows()
     {
         foreach (var window in _windows) window.Close(); _windows.Clear();
-        foreach (var screen in Forms.Screen.AllScreens) { var window = new OverlayWindow(_paint, screen.Bounds); _windows.Add(window); window.Show(); }
+        foreach (var screen in Forms.Screen.AllScreens)
+        {
+            bool measure = _windows.Count == 0;
+            var window = new OverlayWindow(_paint, screen.Bounds, measure ? RecordFrame : () => { }); _windows.Add(window); window.Show();
+        }
     }
-    private void Tick(object? sender, EventArgs args) { foreach (var window in _windows) window.InvalidateVisual(); }
+    private static void RenderAll(object? sender, EventArgs args)
+    {
+        if (args is not RenderingEventArgs frame || frame.RenderingTime == _lastRendering) return;
+        double interval = 1d / TargetFrameRate;
+        double elapsed = _lastRendering == TimeSpan.MinValue ? interval : Math.Max(0, (frame.RenderingTime - _lastRendering).TotalSeconds);
+        _lastRendering = frame.RenderingTime;
+        // Preserve fractional frame credit: resetting the timestamp would turn a 60 FPS target on a 144 Hz display into 48 FPS.
+        _frameCredit = Math.Min(_frameCredit + elapsed, interval * 2);
+        if (_frameCredit + .0002 < interval) return;
+        _frameCredit = Math.Max(0, _frameCredit - interval); FrameId++;
+        foreach (var overlay in Active.ToArray()) foreach (var window in overlay._windows) window.InvalidateVisual();
+    }
+    private void RecordFrame()
+    {
+        _frames++;
+        if (_measurement.Elapsed.TotalSeconds < 1) return;
+        _actualFps = _frames / _measurement.Elapsed.TotalSeconds; _frames = 0; _measurement.Restart();
+    }
     private void DisplayChanged(object? sender, EventArgs args) => System.Windows.Application.Current.Dispatcher.BeginInvoke(() => { if (!_disposed) BuildWindows(); });
     public void Dispose()
     {
         if (_disposed) return; _disposed = true;
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= DisplayChanged;
-        _timer.Stop(); _timer.Tick -= Tick;
+        Active.Remove(this);
+        if (Active.Count == 0) CompositionTarget.Rendering -= RenderAll;
         foreach (var window in _windows) window.Close(); _windows.Clear(); GC.SuppressFinalize(this);
     }
     private sealed class OverlayWindow : Window
     {
         private readonly Action<OverlayFrame> _paint;
         private readonly System.Drawing.Rectangle _screen;
-        public OverlayWindow(Action<OverlayFrame> paint, System.Drawing.Rectangle screen)
+        private readonly Action _recordFrame;
+        public OverlayWindow(Action<OverlayFrame> paint, System.Drawing.Rectangle screen, Action recordFrame)
         {
-            _paint = paint; _screen = screen;
+            _paint = paint; _screen = screen; _recordFrame = recordFrame;
             WindowStyle = WindowStyle.None; AllowsTransparency = true; Background = Brushes.Transparent;
             ShowInTaskbar = false; ShowActivated = false; Topmost = true; ResizeMode = ResizeMode.NoResize; IsHitTestVisible = false;
             Left = screen.Left; Top = screen.Top; Width = Math.Max(1, screen.Width); Height = Math.Max(1, screen.Height);
@@ -73,6 +107,7 @@ public sealed class Overlay : IDisposable
         protected override void OnRender(DrawingContext drawing)
         {
             base.OnRender(drawing);
+            _recordFrame();
             var dpi = VisualTreeHelper.GetDpi(this);
             var frame = new OverlayFrame(drawing, new Rect(0, 0, ActualWidth, ActualHeight), p => new Point((p.X - _screen.Left) / dpi.DpiScaleX, (p.Y - _screen.Top) / dpi.DpiScaleY), dpi.DpiScaleX);
             try { _paint(frame); } catch { /* Rendering may fail during display teardown. The overlay remains click-through. */ }

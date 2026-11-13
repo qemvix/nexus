@@ -21,7 +21,7 @@ public sealed class ScreenRuler() : NexusModule(new("screen-ruler", "ScreenRuler
     {
         Resources.Add(Context.Hotkeys.Register("Ctrl+Alt+R", () => { Native.GetCursorPos(out var p); _anchor = _anchor is null ? p : null; }));
         Resources.Add(Context.Hotkeys.Register("Ctrl+Alt+C", Pick));
-        Resources.Add(new Overlay(Draw, 20)); Resources.Add(new ActionDisposable(() => _anchor = null));
+        Resources.Add(new Overlay(Draw, "ScreenRuler")); Resources.Add(new ActionDisposable(() => _anchor = null));
     }
     private void Pick()
     {
@@ -87,7 +87,7 @@ public sealed class KeyCast() : NexusModule(new("key-cast", "KeyCast", "Producti
             var rect = new Rect(40, frame.Bounds.Height - 110, 500, 65);
             frame.Drawing.DrawRoundedRectangle(OverlayFrame.Brush("#121525", .93), new Pen(OverlayFrame.Brush("#3D415A"), 1), rect, 14, 14);
             frame.Text(_label, new(rect.X + 20, rect.Y + 12), Options.Size, Options.Accent);
-        }, 15));
+        }, "KeyCast"));
         Resources.Add(new ActionDisposable(() => { _label = ""; _time = 0; }));
     }
 }

@@ -121,5 +121,5 @@ public sealed class FocusFade() : NexusModule(new("focus-fade", "FocusFade", "De
         var geometry = new CombinedGeometry(GeometryCombineMode.Exclude, new RectangleGeometry(frame.Bounds), new RectangleGeometry(active, 8, 8));
         frame.Drawing.DrawGeometry(OverlayFrame.Brush("#000000", Options.Intensity), null, geometry);
         frame.Drawing.DrawRoundedRectangle(null, new Pen(OverlayFrame.Brush(Options.Accent, .8), Options.Size / 16), active, 8, 8);
-    }, 20));
+    }, "FocusFade"));
 }

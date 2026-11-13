@@ -9,6 +9,6 @@
 7. Push the repository to a repository named `nexus`; package identities are already nexus-core/cursor/desktop/productivity. The supplied workflow builds on main/PR and creates a **draft** release for a `v*` tag. It does not publish without review or provision update infrastructure automatically.
 8. Review artifacts, hashes, release notes, screenshots, licenses and known issues. Publish the draft only after acceptance. Keep a previous installer available for manual rollback.
 
-The initial source is GitHub-ready and local. A remote repository, Authenticode identity, hosted manifest and production signing pipeline are not provisioned by the local build. Do not infer a download link from an assumed GitHub username.
+The source repository is private at [qemvix/nexus](https://github.com/qemvix/nexus). Authenticode signing, a hosted update manifest and a production signing pipeline are not provisioned. CI artifacts do not automatically configure the built-in updater.
 
 Installer architecture: the self-contained app launches a native installer when named Nexus-Setup or passed --install. It copies only the single-file executable, creates a Start-menu link using the Windows shell, and registers HKCU uninstall metadata. It does not silently install startup services. A temporary helper removes known installed files on uninstall. Settings remain in a separate local-data folder.

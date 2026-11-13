@@ -48,7 +48,7 @@ public static class Installer
         try { shortcut.TargetPath = target; shortcut.WorkingDirectory = destination; shortcut.Description = "Nexus desktop enhancement ecosystem"; shortcut.Save(); }
         finally { Marshal.FinalReleaseComObject(shortcut); Marshal.FinalReleaseComObject(shell); }
         using var key = Registry.CurrentUser.CreateSubKey(RegistryPath);
-        key.SetValue("DisplayName", "Nexus"); key.SetValue("DisplayVersion", "0.1.0"); key.SetValue("Publisher", "Nexus contributors"); key.SetValue("InstallLocation", destination);
+        key.SetValue("DisplayName", "Nexus"); key.SetValue("DisplayVersion", "0.2.0"); key.SetValue("Publisher", "Nexus contributors"); key.SetValue("InstallLocation", destination);
         key.SetValue("UninstallString", "\"" + target + "\" --uninstall"); key.SetValue("DisplayIcon", target); key.SetValue("NoModify", 1); key.SetValue("NoRepair", 1);
         key.SetValue("EstimatedSize", (int)(new FileInfo(target).Length / 1024));
     }

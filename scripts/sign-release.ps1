@@ -1,4 +1,4 @@
-param([Parameter(Mandatory)][string]$Binary, [Parameter(Mandatory)][string]$Url, [Parameter(Mandatory)][string]$PrivateKeyFile, [string]$Version = '0.1.0', [string]$Output = 'release.json')
+param([Parameter(Mandatory)][string]$Binary, [Parameter(Mandatory)][string]$Url, [Parameter(Mandatory)][string]$PrivateKeyFile, [string]$Version = '0.2.0', [string]$Output = 'release.json')
 $ErrorActionPreference = 'Stop'
 # PowerShell 7+ is required for RSA.ImportFromPem. Keep private keys outside this repository.
 if (-not $Url.StartsWith('https://')) { throw 'An HTTPS release URL is required' }

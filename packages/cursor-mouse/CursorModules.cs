@@ -10,7 +10,7 @@ namespace Nexus.Cursor;
 
 public static class CursorCatalog
 {
-    public static INexusModule[] Create() => [new CursorAura(), new ClickFx(), new ScrollFlow(), new CursorLens()];
+    public static INexusModule[] Create() => [new CursorAura(), new ClickFx(), new ScrollFlow(), new CursorLens(), new CursorBlur()];
 }
 public sealed class CursorAura() : NexusModule(new("cursor-aura", "Cursor Aura", "Cursor & mouse", "Give your pointer a glow, soft halo, trail, particles or spotlight.", Capability.Mouse),
     new("Mode", "Effect", Choices: ["Glow", "Blur", "Trail", "Particles", "Spotlight"]), new("Size", "Radius", 16, 180), new("Intensity", "Opacity", .05, 1), new("Accent", "Accent color", IsText: true))
@@ -19,7 +19,7 @@ public sealed class CursorAura() : NexusModule(new("cursor-aura", "Cursor Aura",
     protected override void OnStart()
     {
         Resources.Add(Context.Input.Mouse(e => { if (e.Message != 0x200) return; _trail.Enqueue((e.X, e.Y)); while (_trail.Count > 22) _trail.Dequeue(); }));
-        Resources.Add(new Overlay(Draw, 30));
+        Resources.Add(new Overlay(Draw, "Cursor Aura"));
         Resources.Add(new ActionDisposable(_trail.Clear));
     }
     private void Draw(OverlayFrame frame)
@@ -66,7 +66,7 @@ public sealed class ClickFx() : NexusModule(new("click-fx", "ClickFX", "Cursor &
             if (_clicks.Count > 30) _clicks.RemoveAt(0);
             if (Options.Sound) System.Media.SystemSounds.Asterisk.Play();
         }));
-        Resources.Add(new Overlay(Draw)); Resources.Add(new ActionDisposable(_clicks.Clear));
+        Resources.Add(new Overlay(Draw, "ClickFX")); Resources.Add(new ActionDisposable(_clicks.Clear));
     }
     private void Draw(OverlayFrame frame)
     {
@@ -82,70 +82,77 @@ public sealed class ClickFx() : NexusModule(new("click-fx", "ClickFX", "Cursor &
         }
     }
 }
-/// <summary>Integrates fractional wheel deltas with a decay curve. Injected packets never re-enter the filter.</summary>
-public sealed class ScrollFlow() : NexusModule(new("scroll-flow", "ScrollFlow", "Cursor & mouse", "Smooth wheel momentum with acceleration, inversion and per-app profiles.", Capability.Mouse),
-    new("Sensitivity", "Sensitivity", .1, 5), new("Momentum", "Momentum", 0, .95), new("Speed", "Acceleration", .1, 3), new("Invert", "Invert scrolling", IsToggle: true))
+/// <summary>Hosts the user's Glide engine with Nexus-owned settings and lifecycle. No second smoothing layer is added.</summary>
+public sealed class ScrollFlow() : NexusModule(new("scroll-flow", "ScrollFlow", "Cursor & mouse", "Glide-powered touchpad-style scrolling, app exclusions and fullscreen pausing.", Capability.Mouse),
+    new("Sensitivity", "Scroll speed (1 = 100%)", .25, 2.5), new("GlideMilliseconds", "Glide duration (milliseconds)", 100, 700),
+    new("NativeTouchpad", "Use native touchpad gestures when available", IsToggle: true), new("PauseFullscreen", "Pause in fullscreen apps", IsToggle: true),
+    new("ExcludedApps", "Excluded processes (comma-separated, .exe optional)", IsText: true), new("Invert", "Invert scrolling", IsToggle: true))
 {
-    private double _pending, _fraction, _momentum;
-    private string _process = "";
-    private long _lastWheel;
-    private bool _canTransform;
-    private long _lastFailure;
+    private GlideBackend.ScrollEngine? _engine;
     protected override void OnStart()
     {
-        var profileTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
-        profileTimer.Tick += (_, _) => { _process = Native.ForegroundProcess(); _canTransform = Native.CanTransformForeground(); }; profileTimer.Start();
-        Resources.Add(new ActionDisposable(profileTimer.Stop));
-        Resources.Add(Context.Input.WheelFilter(e =>
+        var standalone = Process.GetProcessesByName("Glide");
+        bool running = standalone.Any(); foreach (var process in standalone) process.Dispose();
+        if (running) throw new InvalidOperationException("Exit standalone Glide before enabling ScrollFlow, so the two engines do not transform the same wheel input.");
+        var settings = new GlideBackend.Settings
         {
-            if (!_canTransform || (_lastFailure != 0 && Stopwatch.GetElapsedTime(_lastFailure).TotalSeconds < 5) || Native.ExternalForeground() == 0) return false;
-            var profile = Options.ScrollProfiles.FirstOrDefault(p => string.Equals(p.Process, _process, StringComparison.OrdinalIgnoreCase));
-            double sensitivity = profile?.Sensitivity ?? Options.Sensitivity;
-            bool invert = profile?.Invert ?? Options.Invert;
-            double elapsed = _lastWheel == 0 ? 1 : Stopwatch.GetElapsedTime(_lastWheel).TotalSeconds; _lastWheel = Stopwatch.GetTimestamp();
-            double acceleration = elapsed < .08 ? Math.Min(2.5, 1 + Options.Speed * (.08 - elapsed) * 8) : 1;
-            _pending = Math.Clamp(_pending + e.Delta * sensitivity * acceleration * (invert ? -1 : 1), -6000, 6000);
-            _momentum = profile?.Momentum ?? Options.Momentum;
-            return true;
-        }));
-        var timer = new DispatcherTimer(DispatcherPriority.Input) { Interval = TimeSpan.FromMilliseconds(8) };
-        timer.Tick += (_, _) =>
-        {
-            if (Math.Abs(_pending) < .05) { _pending = 0; return; }
-            double step = _pending * (1 - _momentum * .94); _pending -= step;
-            _fraction += step; int delta = (int)_fraction; _fraction -= delta;
-            if (delta != 0 && !Native.SendWheel(delta)) { _lastFailure = Stopwatch.GetTimestamp(); _pending = _fraction = 0; }
+            Enabled = true,
+            NativeTouchpad = Options.NativeTouchpad,
+            PauseFullscreen = Options.PauseFullscreen,
+            SpeedPercent = (int)Math.Round(Options.Sensitivity * 100),
+            GlideMilliseconds = (int)Math.Round(Options.GlideMilliseconds),
+            Invert = Options.Invert,
+            ExcludedApps = Options.ExcludedApps,
+            Profiles = Options.ScrollProfiles.ToArray()
         };
-        timer.Start(); Resources.Add(new ActionDisposable(() => { timer.Stop(); _pending = _fraction = 0; }));
+        settings.Validate(); _engine = new GlideBackend.ScrollEngine(settings, false); Resources.Add(_engine);
+        Resources.Add(new ActionDisposable(() => _engine = null));
     }
-    public override FrameworkElement? CreatePanel(ModuleOptions options) => Ui.JsonEditor("Per-app profiles: Process, Sensitivity, Invert, Momentum", options.ScrollProfiles, (List<ScrollProfile> profiles) => { options.ScrollProfiles = profiles; options.Validate(); });
+    public override FrameworkElement? CreatePanel(ModuleOptions options)
+    {
+        var panel = new System.Windows.Controls.StackPanel();
+        panel.Children.Add(Ui.Text("Powered by your Glide engine. Run only one of Glide or ScrollFlow at a time.", 13, "#B8A8FF"));
+        var status = Ui.Text(_engine?.Status ?? "Enable ScrollFlow to start Glide.", 13, "#72E3CA"); panel.Children.Add(status);
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        timer.Tick += (_, _) => status.Text = _engine is null ? "ScrollFlow is disabled." : _engine.Status + "\n" + _engine.OutputMode + (_engine.Error is null ? "" : "\n" + _engine.Error);
+        panel.Loaded += (_, _) => timer.Start(); panel.Unloaded += (_, _) => timer.Stop();
+        panel.Children.Add(Ui.JsonEditor("Per-app profiles: Process, Sensitivity, Invert, optional GlideMilliseconds", options.ScrollProfiles, (List<ScrollProfile> profiles) => { options.ScrollProfiles = profiles; options.Validate(); }));
+        return panel;
+    }
 }
 public sealed class CursorLens() : NexusModule(new("cursor-lens", "Cursor Lens", "Cursor & mouse", "A mouse-following magnifier with circular or square framing.", Capability.Screen),
     new("Size", "Lens size", 80, 320), new("Zoom", "Magnification", 1.1, 8), new("Shape", "Shape", Choices: ["Circle", "Square"]), new("AlwaysOnTop", "Presentation crosshair", IsToggle: true))
 {
-    private BitmapSource? _image;
-    private long _capture;
+    private WriteableBitmap? _image;
+    private System.Drawing.Bitmap? _captureSurface;
+    private long _captureFrame = -1;
     protected override void OnStart()
     {
-        Resources.Add(new Overlay(Draw, 12)); Resources.Add(new ActionDisposable(() => _image = null));
+        Resources.Add(new Overlay(Draw, "Cursor Lens")); Resources.Add(new ActionDisposable(() => { _captureSurface?.Dispose(); _captureSurface = null; _image = null; _captureFrame = -1; }));
     }
     private void Draw(OverlayFrame frame)
     {
         Native.GetCursorPos(out var point);
-        if (_capture == 0 || Stopwatch.GetElapsedTime(_capture).TotalMilliseconds > 70)
+        var p = frame.Point(point.X, point.Y);
+        if (!frame.Bounds.Contains(p)) return;
+        if (_captureFrame != frame.FrameId)
         {
-            _capture = Stopwatch.GetTimestamp();
+            _captureFrame = frame.FrameId;
             int sourceSize = Math.Max(12, (int)(Options.Size / Options.Zoom));
             var monitor = System.Windows.Forms.Screen.FromPoint(new System.Drawing.Point(point.X, point.Y)).Bounds;
             int left = Math.Clamp(point.X - sourceSize / 2, monitor.Left, Math.Max(monitor.Left, monitor.Right - sourceSize));
             int top = Math.Clamp(point.Y - sourceSize / 2, monitor.Top, Math.Max(monitor.Top, monitor.Bottom - sourceSize));
-            using var bitmap = new System.Drawing.Bitmap(sourceSize, sourceSize);
-            using (var graphics = System.Drawing.Graphics.FromImage(bitmap)) graphics.CopyFromScreen(left, top, 0, 0, bitmap.Size);
-            var handle = bitmap.GetHbitmap();
-            try { _image = Imaging.CreateBitmapSourceFromHBitmap(handle, 0, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions()); _image.Freeze(); }
-            finally { Native.DeleteObject(handle); }
+            if (_captureSurface is null || _captureSurface.Width != sourceSize)
+            {
+                _captureSurface?.Dispose(); _captureSurface = new System.Drawing.Bitmap(sourceSize, sourceSize, System.Drawing.Imaging.PixelFormat.Format32bppRgb);
+                _image = new WriteableBitmap(sourceSize, sourceSize, 96, 96, PixelFormats.Bgr32, null);
+            }
+            using (var graphics = System.Drawing.Graphics.FromImage(_captureSurface)) graphics.CopyFromScreen(left, top, 0, 0, _captureSurface.Size);
+            var data = _captureSurface.LockBits(new System.Drawing.Rectangle(0, 0, sourceSize, sourceSize), System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppRgb);
+            try { _image!.WritePixels(new Int32Rect(0, 0, sourceSize, sourceSize), data.Scan0, data.Stride * sourceSize, data.Stride); }
+            finally { _captureSurface.UnlockBits(data); }
         }
-        var p = frame.Point(point.X, point.Y); double size = Options.Size;
+        double size = Options.Size;
         double x = Math.Clamp(p.X + 30, 4, Math.Max(4, frame.Bounds.Width - size - 4));
         double y = Math.Clamp(p.Y + 30, 4, Math.Max(4, frame.Bounds.Height - size - 4));
         if (!frame.Bounds.Contains(p)) return;

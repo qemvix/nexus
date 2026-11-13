@@ -19,7 +19,10 @@ public sealed class WindowStyleLease : IDisposable
         if (!layered) { _alpha = 255; _flags = 2; }
         Native.SetWindowLongPtr(window, -20, _style | 0x80000);
         if (!Native.SetLayeredWindowAttributes(window, 0, opacity, 2)) { int error = Marshal.GetLastWin32Error(); Dispose(); throw new Win32Exception(error, "Window opacity is unavailable (Windows error " + error + ")."); }
-        Native.SetWindowPos(window, topmost ? -1 : -2, 0, 0, 0, 0, 0x13);
+        if (!Native.SetWindowPos(window, new nint(topmost ? -1 : -2), 0, 0, 0, 0, 0x13))
+        {
+            int error = Marshal.GetLastWin32Error(); Dispose(); throw new Win32Exception(error, "Window topmost control is unavailable (Windows error " + error + ").");
+        }
     }
     public void Dispose()
     {

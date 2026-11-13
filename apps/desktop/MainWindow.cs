@@ -26,6 +26,8 @@ public sealed class MainWindow : Window
     private readonly StackPanel _page = new();
     private readonly TextBlock _notice = Ui.Text("", 12, "#72E3CA");
     private readonly TextBlock _runtime = Ui.Text("", 11, "#8890AA");
+    private TextBlock? _overlayMetrics;
+    public int ModuleCount => _manager.Entries.Count;
     private readonly DispatcherTimer _statsTimer;
     private readonly DispatcherTimer _updateTimer;
     private CancellationTokenSource _networkOperations = new();
@@ -36,6 +38,7 @@ public sealed class MainWindow : Window
     public MainWindow(string directory, Diagnostics diagnostics)
     {
         _diagnostics = diagnostics; _store = new(directory); _config = _store.Load();
+        Overlay.TargetFrameRate = _config.OverlayFps;
         Title = "Nexus — Desktop, refined."; Width = 1180; Height = 880; MinWidth = 920; MinHeight = 640; WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Background = Ui.Brush("#0D0F19"); Foreground = Ui.Brush("#ECEAF7"); FontFamily = new FontFamily("Segoe UI");
         Icon = BitmapFrame.Create(new Uri("pack://application:,,,/Assets/nexus.ico"));
@@ -48,7 +51,7 @@ public sealed class MainWindow : Window
         _tray = new Forms.NotifyIcon { Icon = new System.Drawing.Icon(iconStream), Text = "Nexus · desktop enhancement ecosystem", Visible = true };
         var menu = new Forms.ContextMenuStrip(); menu.Items.Add("Open Nexus", null, (_, _) => ShowHub()); menu.Items.Add("Pause all modules", null, (_, _) => { _manager.PauseAll(); Navigate(_section); }); menu.Items.Add("Exit Nexus", null, (_, _) => Exit());
         _tray.ContextMenuStrip = menu; _tray.DoubleClick += (_, _) => ShowHub();
-        _statsTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) }; _statsTimer.Tick += (_, _) => _runtime.Text = Diagnostics.Summary(); _statsTimer.Start();
+        _statsTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) }; _statsTimer.Tick += (_, _) => { _runtime.Text = Diagnostics.Summary(); if (_overlayMetrics is not null) _overlayMetrics.Text = Overlay.PerformanceSummary; }; _statsTimer.Start();
         _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) }; _updateTimer.Tick += async (_, _) => await BackgroundUpdateCheck(); _updateTimer.Start();
         Dispatcher.BeginInvoke(async () => await BackgroundUpdateCheck());
         Navigate("Overview"); _notice.Text = _store.RecoveryMessage;
@@ -59,7 +62,7 @@ public sealed class MainWindow : Window
         var root = new Grid(); root.ColumnDefinitions.Add(new() { Width = new GridLength(222) }); root.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
         var rail = new DockPanel { Background = Ui.Brush("#10121E"), Margin = new Thickness(0, 0, 1, 0) }; var brand = new StackPanel { Margin = new Thickness(26, 28, 20, 0) }; DockPanel.SetDock(brand, Dock.Top);
         brand.Children.Add(Ui.Text("◈  nexus", 30)); brand.Children.Add(Ui.Text("DESKTOP, REFINED.", 10, "#9691B0")); brand.Children.Add(new Border { Height = 28 }); rail.Children.Add(brand);
-        var footer = new StackPanel { Margin = new Thickness(22) }; DockPanel.SetDock(footer, Dock.Bottom); footer.Children.Add(Ui.Text("NEXUS  /  0.1 PREVIEW", 10, "#9691B0")); footer.Children.Add(_runtime); rail.Children.Add(footer);
+        var footer = new StackPanel { Margin = new Thickness(22) }; DockPanel.SetDock(footer, Dock.Bottom); footer.Children.Add(Ui.Text("NEXUS  /  0.2 PREVIEW", 10, "#9691B0")); footer.Children.Add(_runtime); rail.Children.Add(footer);
         var nav = new StackPanel { Margin = new Thickness(14, 0, 8, 0) };
         foreach (var name in new[] { "Overview", "All modules", "Cursor & mouse", "Desktop", "Productivity", "Profiles", "Hotkeys", "Permissions", "Settings & updates" })
         {
@@ -88,7 +91,7 @@ public sealed class MainWindow : Window
     private void Heading(string title, string subtitle) { _page.Children.Add(Ui.Text(title, 30)); _page.Children.Add(Ui.Text(subtitle, 14, "#A6ACC5")); _page.Children.Add(new Border { Height = 12 }); }
     private void Overview()
     {
-        Heading("Make your desktop yours.", "Twelve native utilities. One quiet place to bring them together.");
+        Heading("Make your desktop yours.", "Thirteen native utilities. One quiet place to bring them together.");
         var hero = new Grid(); hero.ColumnDefinitions.Add(new()); hero.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         var intro = new StackPanel(); intro.Children.Add(Ui.Text("A LITTLE LESS FRICTION", 10, "#B8A8FF")); intro.Children.Add(Ui.Text("Find your flow.", 31)); intro.Children.Add(Ui.Text("Shape your cursor. Clear distractions.\nKeep useful controls within reach.", 14, "#C0BED6")); intro.Children.Add(Ui.Button("Explore your modules  →", () => Navigate("All modules"))); hero.Children.Add(intro);
         var art = new Grid { Width = 235, Height = 175, Margin = new Thickness(15, 0, 0, 0) }; Grid.SetColumn(art, 1);
@@ -96,7 +99,7 @@ public sealed class MainWindow : Window
         art.Children.Add(new TextBlock { Text = "◈", FontSize = 36, Foreground = Ui.Brush("#DDD6FF"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }); hero.Children.Add(art);
         var heroCard = Ui.Card(hero); heroCard.Background = new LinearGradientBrush(Color.FromRgb(38, 31, 67), Color.FromRgb(19, 35, 46), 20); heroCard.Padding = new Thickness(28); _page.Children.Add(heroCard);
         var stats = new System.Windows.Controls.Primitives.UniformGrid { Columns = 3, Margin = new Thickness(0, 4, 0, 12) };
-        foreach (var (value, label) in new[] { (_manager.Entries.Count(e => e.Status == ModuleStatus.Running).ToString(), "MODULES ACTIVE"), ("12", "WAYS TO REFINE"), ("Local", "PRIVATE BY DEFAULT") })
+        foreach (var (value, label) in new[] { (_manager.Entries.Count(e => e.Status == ModuleStatus.Running).ToString(), "MODULES ACTIVE"), (ModuleCount.ToString(), "WAYS TO REFINE"), ("Local", "PRIVATE BY DEFAULT") })
         {
             var column = new StackPanel(); column.Children.Add(Ui.Text(value, 26, "#C1B4FF")); column.Children.Add(Ui.Text(label, 10, "#A6ACC5")); var card = Ui.Card(column); card.Margin = new Thickness(0, 0, 12, 0); stats.Children.Add(card);
         }
@@ -231,7 +234,13 @@ public sealed class MainWindow : Window
     {
         Heading("Quiet by design.", "Local configuration, deliberate network access, and no telemetry service.");
         var motion = new CheckBox { Content = "Reduce motion (Windows accessibility preference is also respected)", IsChecked = _config.ReducedMotion }; motion.Click += (_, _) => { _config.ReducedMotion = motion.IsChecked == true; Save(); }; _page.Children.Add(Ui.Card(motion));
-        _page.Children.Add(Ui.Text("Nexus 0.1.0 · native Windows / .NET 10\n" + Diagnostics.Summary() + "\nLast local error: " + _diagnostics.LastError, 13, "#A6ACC5"));
+        _page.Children.Add(Ui.Text("Overlay rendering", 22));
+        var rate = new ComboBox { ItemsSource = new[] { 60, 90, 120, 144, 165, 240 }, SelectedItem = _config.OverlayFps, Margin = new Thickness(0, 4, 0, 12) };
+        System.Windows.Automation.AutomationProperties.SetName(rate, "Overlay target frames per second");
+        rate.SelectionChanged += (_, _) => { if (rate.SelectedItem is int fps) { _config.OverlayFps = fps; Overlay.TargetFrameRate = fps; Save(); } }; _page.Children.Add(rate);
+        _overlayMetrics = Ui.Text(Overlay.PerformanceSummary, 13, "#A6ACC5"); _page.Children.Add(_overlayMetrics);
+        _page.Children.Add(Ui.Text("60 FPS by default; higher targets follow the display's composition cadence. Measured rendering can be lower under load or on a slower display.", 12, "#A6ACC5"));
+        _page.Children.Add(Ui.Text("Nexus 0.2.0 · native Windows / .NET 10\n" + Diagnostics.Summary() + "\nLast local error: " + _diagnostics.LastError, 13, "#A6ACC5"));
         _page.Children.Add(Ui.Button("Open local settings and diagnostics", () => Ui.Launch(_store.DirectoryPath)));
         _page.Children.Add(Ui.Text("Signed updates", 22)); _page.Children.Add(Ui.Text("Publisher setup required: an HTTPS signed manifest and trusted RSA public key. No update server is configured in this preview.", 13, "#A6ACC5"));
         var automatic = new CheckBox { Content = "Check automatically once per day (download and installation remain your choice)", IsChecked = _config.AutoCheckUpdates };
@@ -248,7 +257,7 @@ public sealed class MainWindow : Window
                 _config.UpdateUrl = url.Text.Trim(); _config.UpdatePublicKey = key.Text; Save();
                 var release = await UpdateService.Check(_config.UpdateUrl, _config.UpdatePublicKey, _networkOperations.Token);
                 _config.LastUpdateCheck = DateTimeOffset.UtcNow; Save();
-                if (Version.Parse(release.Version) <= new Version(0, 1, 0)) { _notice.Text = "You have the latest release."; return; }
+                if (Version.Parse(release.Version) <= new Version(0, 2, 0)) { _notice.Text = "You have the latest release."; return; }
                 if (MessageBox.Show($"Download verified Nexus {release.Version} and open its installer?", "Nexus update", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
                 string path = await UpdateService.Download(release, Path.Combine(_store.DirectoryPath, "updates"), _networkOperations.Token);
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path, "--install") { UseShellExecute = true }); Exit();
@@ -270,7 +279,7 @@ public sealed class MainWindow : Window
             // Record attempts too, so a broken/offline endpoint is never polled every minute.
             _config.LastUpdateCheck = DateTimeOffset.UtcNow; Save();
             var release = await UpdateService.Check(_config.UpdateUrl, _config.UpdatePublicKey, _networkOperations.Token);
-            if (Version.Parse(release.Version) > new Version(0, 1, 0)) _notice.Text = $"Nexus {release.Version} is available. Open Settings & updates to review it.";
+            if (Version.Parse(release.Version) > new Version(0, 2, 0)) _notice.Text = $"Nexus {release.Version} is available. Open Settings & updates to review it.";
         }
         catch (OperationCanceledException) { }
         catch (Exception e) { _diagnostics.Log("update-check", e); }

@@ -10,7 +10,7 @@ Primary action: **Get the Windows preview**
 
 Secondary action: **Explore the source**
 
-Release label: Windows x64 · 0.1 preview · unsigned build
+Release label: Windows x64 · 0.2 preview · unsigned build
 
 ## Three ways to make Windows feel yours
 
