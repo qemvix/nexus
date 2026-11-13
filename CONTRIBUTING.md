@@ -1,5 +1,7 @@
 # Contributing
 
+Nexus is proprietary. Review LICENSE and obtain qemvix's written permission for modification, redistribution or derivative work where required by its terms. Authorized contributors should follow the workflow below; it does not grant additional license rights.
+
 Use Windows and the .NET 10 SDK. Open `Nexus.sln` in Visual Studio with desktop development support or use the documented CLI commands. Format using `dotnet format Nexus.sln` before submitting a change.
 
 Keep feature code in its family package, native and shared ownership rules in core, and app composition in the desktop application. Public module APIs use typed models and declare capabilities. Do not load unsigned or untrusted external code into the main process. Avoid adding a package dependency when an OS/framework API is enough; document any new dependency and its license.

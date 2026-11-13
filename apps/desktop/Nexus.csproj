@@ -4,6 +4,7 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="../../LICENSE" LogicalName="Nexus.LICENSE" />
     <Resource Include="Assets/nexus.ico" />
     <ProjectReference Include="../../packages/cursor-mouse/Nexus.Cursor.csproj" />
     <ProjectReference Include="../../packages/desktop-customization/Nexus.Desktop.csproj" />

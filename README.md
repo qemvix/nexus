@@ -102,4 +102,4 @@ nexus/
 - [Release guide](docs/RELEASING.md), [release notes](docs/RELEASE_NOTES.md), [roadmap](docs/ROADMAP.md)
 - [Contribution guide](CONTRIBUTING.md), [landing-page copy](docs/LANDING_PAGE_COPY.md)
 
-MIT licensed. Source, build scripts and documentation remain usable independently of ChatGPT or a Plus subscription.
+Proprietary; copyright (c) 2026 qemvix, all rights reserved. Official Nexus releases may be used for personal desktop use under [LICENSE](LICENSE). Other uses require the permission described there. Third-party components retain their own terms and attribution. The app runs independently of ChatGPT or a Plus subscription.

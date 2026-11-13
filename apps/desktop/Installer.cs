@@ -18,7 +18,7 @@ public static class Installer
         var panel = new StackPanel(); panel.Children.Add(Ui.Text("◈  nexus", 34)); panel.Children.Add(Ui.Text("Your desktop, refined.", 21));
         panel.Children.Add(Ui.Text("Install the complete Nexus hub and module library for your Windows account.\n\nNo administrator access, startup entry or network connection is required. All features start disabled.\n\nLocation: " + InstallDirectory, 14, "#B4BAD1"));
         var status = Ui.Text("", 13, "#72E3CA"); panel.Children.Add(status);
-        var window = new Window { Title = "Install Nexus", Width = 560, Height = 470, ResizeMode = ResizeMode.NoResize, WindowStartupLocation = WindowStartupLocation.CenterScreen, Content = new Border { Padding = new Thickness(32), Child = panel } };
+        var window = new Window { Title = "Install Nexus", Width = 560, Height = 600, ResizeMode = ResizeMode.NoResize, WindowStartupLocation = WindowStartupLocation.CenterScreen, Content = new Border { Padding = new Thickness(32), Child = panel } };
         window.Icon = System.Windows.Media.Imaging.BitmapFrame.Create(new Uri("pack://application:,,,/Assets/nexus.ico"));
         var install = Ui.Button("Install Nexus", () =>
         {
@@ -32,7 +32,7 @@ public static class Installer
             }
             catch (Exception e) { status.Text = "Installation could not finish: " + e.Message; }
         });
-        panel.Children.Add(install); panel.Children.Add(Ui.Button("Cancel", window.Close)); window.ShowDialog();
+        panel.Children.Add(Ui.Button("View Nexus license", LicenseNotice.Show)); panel.Children.Add(install); panel.Children.Add(Ui.Button("Cancel", window.Close)); window.ShowDialog();
     }
     public static void InstallFiles(string source, string destination, bool register)
     {
@@ -48,7 +48,7 @@ public static class Installer
         try { shortcut.TargetPath = target; shortcut.WorkingDirectory = destination; shortcut.Description = "Nexus desktop enhancement ecosystem"; shortcut.Save(); }
         finally { Marshal.FinalReleaseComObject(shortcut); Marshal.FinalReleaseComObject(shell); }
         using var key = Registry.CurrentUser.CreateSubKey(RegistryPath);
-        key.SetValue("DisplayName", "Nexus"); key.SetValue("DisplayVersion", "0.2.0"); key.SetValue("Publisher", "Nexus contributors"); key.SetValue("InstallLocation", destination);
+        key.SetValue("DisplayName", "Nexus"); key.SetValue("DisplayVersion", "0.2.0"); key.SetValue("Publisher", "qemvix"); key.SetValue("InstallLocation", destination);
         key.SetValue("UninstallString", "\"" + target + "\" --uninstall"); key.SetValue("DisplayIcon", target); key.SetValue("NoModify", 1); key.SetValue("NoRepair", 1);
         key.SetValue("EstimatedSize", (int)(new FileInfo(target).Length / 1024));
     }

@@ -242,6 +242,7 @@ public sealed class MainWindow : Window
         _page.Children.Add(Ui.Text("60 FPS by default; higher targets follow the display's composition cadence. Measured rendering can be lower under load or on a slower display.", 12, "#A6ACC5"));
         _page.Children.Add(Ui.Text("Nexus 0.2.0 · native Windows / .NET 10\n" + Diagnostics.Summary() + "\nLast local error: " + _diagnostics.LastError, 13, "#A6ACC5"));
         _page.Children.Add(Ui.Button("Open local settings and diagnostics", () => Ui.Launch(_store.DirectoryPath)));
+        _page.Children.Add(Ui.Button("View Nexus license", LicenseNotice.Show));
         _page.Children.Add(Ui.Text("Signed updates", 22)); _page.Children.Add(Ui.Text("Publisher setup required: an HTTPS signed manifest and trusted RSA public key. No update server is configured in this preview.", 13, "#A6ACC5"));
         var automatic = new CheckBox { Content = "Check automatically once per day (download and installation remain your choice)", IsChecked = _config.AutoCheckUpdates };
         automatic.Click += (_, _) => { _config.AutoCheckUpdates = automatic.IsChecked == true; Save(); }; _page.Children.Add(automatic);

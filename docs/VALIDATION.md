@@ -5,7 +5,7 @@ Date: 13 November 2026. Platform: Windows x64, .NET SDK 10.0.401 (runtime 10.0.1
 | Check | Result |
 |---|---|
 | Release solution build with warnings treated as errors | Passed, zero warnings and zero errors |
-| Unit/platform executable groups | 20 passed, 0 failed; includes the imported Glide core suite |
+| Unit/platform executable groups | 21 passed, 0 failed; includes the imported Glide core suite and embedded-license verification |
 | Actual cursor-image capture, shared frame clock and opacity/style restoration | Passed; topmost flag acceptance remains manual |
 | Real module startup/stop, all thirteen utilities | 13 passed, 0 failed |
 | Full interactive Glide wheel suite | Passed after closing standalone Glide and leaving the mouse still |
@@ -16,7 +16,7 @@ Date: 13 November 2026. Platform: Windows x64, .NET SDK 10.0.401 (runtime 10.0.1
 | Dashboard and hub screen image inspection | Completed; corrected background and scrollbar styling |
 | Installer file staging | Passed in a temporary test directory |
 
-The main runners report **36 passed, 0 failed** (20 unit/platform groups and 16 native checks), plus the full interactive Glide suite. The imported core suite includes 24 timing/direction combinations and 500 randomized bursts. The wheel test verifies exact distance, speed, horizontal output, precision/tagged bypass, pause/exclusions/fullscreen, pointer cancellation, untagged mouse-software input and ordinary maximized windows. Its packet assertions exercise the wheel fallback; touchpad ABI/startup/fallback checks do not establish every application's native-gesture compatibility.
+The main runners report **37 passed, 0 failed** (21 unit/platform groups and 16 native checks), plus the full interactive Glide suite. The imported core suite includes 24 timing/direction combinations and 500 randomized bursts. The wheel test verifies exact distance, speed, horizontal output, precision/tagged bypass, pause/exclusions/fullscreen, pointer cancellation, untagged mouse-software input and ordinary maximized windows. Its packet assertions exercise the wheel fallback; touchpad ABI/startup/fallback checks do not establish every application's native-gesture compatibility.
 
 **Manual acceptance gap:** Windows did not retain the topmost bit on the plain Win32 test window in this session. Opacity application and original-style restoration passed. Topmost behavior is not claimed as validated on this host. Frame-clock measurements validate the scheduler under one load, not 240 FPS presentation or every effect combination.
 

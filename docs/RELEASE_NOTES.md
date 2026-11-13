@@ -6,6 +6,7 @@ Windows x64 update, prepared 13 November 2026.
 - Added CursorBlur as a separate utility, porting the real cursor-image trail algorithm from the supplied source.
 - Shared composition-synchronized rendering replaces 12–30 FPS timers. Settings offers 60–240 FPS targets and measured rates; Cursor Lens reuses its capture buffers.
 - Created the private qemvix/nexus monorepo for the app and four named packages.
+- Applied the owner's supplied proprietary license, adapting NoMiss/gameplay references to Nexus/desktop use. The installer and settings hub embed and display the same notice.
 
 Includes the Nexus hub, tray controls, module catalog and settings screens; all thirteen feature implementations; local typed settings, named profiles and import/export; explicit capability grants; global hotkey ownership; per-user installer/uninstaller and portable executable; local diagnostics; RSA-signed manifest and binary-digest verification; test/build/release automation; architecture and feature guides.
 

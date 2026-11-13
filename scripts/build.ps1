@@ -23,7 +23,7 @@ try {
         New-Item -ItemType Directory -Path artifacts/release -Force | Out-Null
         Copy-Item -LiteralPath artifacts/publish/Nexus.exe -Destination artifacts/release/Nexus-Setup.exe -Force
         Copy-Item -LiteralPath artifacts/publish/Nexus.exe -Destination artifacts/release/Nexus.exe -Force
-        Compress-Archive -LiteralPath artifacts/release/Nexus.exe -DestinationPath artifacts/release/Nexus-0.2.0-win-x64-portable.zip -Force
+        Compress-Archive -LiteralPath @('artifacts/release/Nexus.exe', 'LICENSE') -DestinationPath artifacts/release/Nexus-0.2.0-win-x64-portable.zip -Force
         Get-ChildItem -LiteralPath artifacts/release -File | Where-Object Name -ne SHA256SUMS.txt | ForEach-Object { $hash = Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256; "$($hash.Hash.ToLowerInvariant())  $($_.Name)" } | Set-Content -LiteralPath artifacts/release/SHA256SUMS.txt
     }
 } finally { Pop-Location }

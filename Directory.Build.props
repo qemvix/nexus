@@ -8,7 +8,8 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <LangVersion>14</LangVersion>
     <Version>0.2.0</Version>
-    <Authors>Nexus contributors</Authors>
+    <Authors>qemvix</Authors>
+    <Copyright>Copyright (c) 2026 qemvix. All rights reserved.</Copyright>
     <AnalysisLevel>latest</AnalysisLevel>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <Deterministic>true</Deterministic>

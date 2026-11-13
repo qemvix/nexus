@@ -30,7 +30,7 @@ No Nexus account. No telemetry service. Clipboard history stays in memory and di
 
 ## Built to keep
 
-Native C#/.NET and WPF. MIT-licensed source, build instructions and release scripts. Your app continues working independently of an AI subscription.
+Native C#/.NET and WPF. Official Nexus releases are available for personal desktop use under the proprietary Nexus license. Your app continues working independently of an AI subscription.
 
 ## Honest preview note
 
