@@ -6,7 +6,7 @@ namespace Nexus.Core;
 [Flags]
 public enum Capability { None = 0, Mouse = 1, Keyboard = 2, Screen = 4, Clipboard = 8, Windows = 16, Network = 32 }
 public enum ModuleStatus { Available, Disabled, Running, Blocked, Faulted }
-public sealed record Manifest(string Id, string Name, string Category, string Description, Capability Permissions, int ApiVersion = 1, string Version = "0.2.0");
+public sealed record Manifest(string Id, string Name, string Category, string Description, Capability Permissions, int ApiVersion = 1, string Version = "0.2.1");
 public sealed record Option(string Key, string Label, double Min = 0, double Max = 100, string[]? Choices = null, bool IsText = false, bool IsToggle = false);
 public sealed record ScrollProfile(string Process, double Sensitivity = 1, bool Invert = false, double Momentum = 0.75, int? GlideMilliseconds = null);
 public sealed record WindowZone(double X, double Y, double Width, double Height);
@@ -81,8 +81,8 @@ public sealed class AppConfig
     public Dictionary<string, ModuleState> Modules { get; set; } = [];
     public Dictionary<string, string> Hotkeys { get; set; } = [];
     public List<Profile> Profiles { get; set; } = [];
-    public string UpdateUrl { get; set; } = "";
-    public string UpdatePublicKey { get; set; } = "";
+    public string UpdateUrl { get; set; } = NexusRelease.ManifestUrl;
+    public string UpdatePublicKey { get; set; } = UpdatePublisher.PublicKey;
     public bool AutoCheckUpdates { get; set; }
     public DateTimeOffset LastUpdateCheck { get; set; }
     [JsonIgnore] public static JsonSerializerOptions JsonOptions { get; } = new() { WriteIndented = true };

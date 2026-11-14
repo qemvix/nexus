@@ -11,10 +11,12 @@ public partial class App : System.Windows.Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        if (e.Args.Contains("--apply-update")) { Installer.ApplyUpdateWorker(e.Args); Shutdown(); return; }
         if (e.Args.Contains("--uninstall-worker")) { Installer.UninstallWorker(e.Args); Shutdown(); return; }
         if (e.Args.Contains("--install") || Path.GetFileNameWithoutExtension(Environment.ProcessPath!).EndsWith("Setup", StringComparison.OrdinalIgnoreCase)) { Installer.ShowInstall(); Shutdown(); return; }
         if (e.Args.Contains("--uninstall")) { Installer.Uninstall(); Shutdown(); return; }
-        _mutex = new Mutex(true, "Local\\Nexus.Desktop.User." + Environment.UserName, out bool created);
+        bool smoke = e.Args.Contains("--smoke");
+        _mutex = new Mutex(true, smoke ? "Local\\Nexus.Desktop.Smoke." + Environment.ProcessId : "Local\\Nexus.Desktop.User." + Environment.UserName, out bool created);
         if (!created) { MessageBox.Show("Nexus is already running. Open it from the notification area.", "Nexus"); Shutdown(); return; }
         string data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Nexus");
         if (e.Args.Contains("--smoke")) data = Path.Combine(e.Args.SkipWhile(x => x != "--smoke").Skip(1).FirstOrDefault() ?? Path.GetTempPath(), "smoke-settings");
@@ -23,7 +25,7 @@ public partial class App : System.Windows.Application
         AppDomain.CurrentDomain.UnhandledException += (_, args) => diagnostics.Log("crash", args.ExceptionObject as Exception ?? new Exception("Unknown crash"));
         try
         {
-            var window = new MainWindow(data, diagnostics); MainWindow = window; window.Show();
+            var window = new MainWindow(data, diagnostics, smoke); MainWindow = window; window.Show();
             if (e.Args.Contains("--smoke"))
             {
                 var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };

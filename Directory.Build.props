@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <LangVersion>14</LangVersion>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <Authors>qemvix</Authors>
     <Copyright>Copyright (c) 2026 qemvix. All rights reserved.</Copyright>
     <AnalysisLevel>latest</AnalysisLevel>

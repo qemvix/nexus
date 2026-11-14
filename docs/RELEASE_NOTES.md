@@ -1,3 +1,19 @@
+# Nexus 0.2.1 preview
+
+Windows x64 bugfix release, 14 November 2026.
+
+- Replaced the nonworking CursorBlur port with the exact working native executable supplied by the owner. The module has enable/disable/uninstall actions and no Configure button.
+- Tied the native process to a kill-on-close job, prevented duplicate engines, checked runtime dependencies, and made process failures visible.
+- Centered the dashboard diamond with vector geometry rather than a font glyph. Rings and diamond share the same measured center.
+- Connected the official signed HTTPS update feed and public key. Updates appear inline with download progress; the new installer waits for Nexus to exit, replaces it and reopens it while keeping settings.
+- Hardened update staging, cancellation cleanup, HTTPS redirect checks and digest validation; versioned verified caches survive unrelated failed downloads.
+- Fixed settings editors mutating active configuration before Apply changes. Module errors now appear directly on library cards, with a Permissions action when blocked.
+- Centralized displayed version/update comparisons, isolated smoke runs from the active user's instance/hotkeys, and qualified icon resource URLs for hosted tests.
+
+The preview remains unsigned by Authenticode. Manifest signatures authenticate the updater, not the Windows publisher dialog. CursorBlur uses its own native timing/motion and requires Microsoft Visual C++ v14 x64. Its WPF predecessor's sliders and FPS/reduced-motion behavior no longer apply. Other 0.2 preview limits remain.
+
+---
+
 # Nexus 0.2.0 preview
 
 Windows x64 update, prepared 13 November 2026.

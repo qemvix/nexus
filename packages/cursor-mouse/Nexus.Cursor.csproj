@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><AssemblyName>Nexus.Cursor</AssemblyName><PackageId>nexus-cursor</PackageId></PropertyGroup>
   <ItemGroup><ProjectReference Include="../core/Nexus.Core.csproj" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="NativeAssets/CursorBlur.exe" LogicalName="Nexus.Cursor.NativeCursorBlur.exe" /></ItemGroup>
 </Project>

@@ -1,13 +1,19 @@
-# CursorBlur and high-frame-rate overlays
+# CursorBlur and overlay rendering
 
-CursorBlur is a separate Nexus utility, not the soft halo option in Cursor Aura. It ports the actual cursor-image trail algorithm from [qemvix/CursorBlur](https://github.com/qemvix/CursorBlur), snapshot `f7b23aea9af72744f2832bd8883bec9911e3e195` / CursorBlur.cpp blob `d91d7442b489d0ec020f055edd3ab83371c571de`. The original C++ source is retained under `packages/cursor-mouse/Upstream/CursorBlur.cpp` for comparison. The upstream README also references obieFM/CursorBlur; provenance is retained rather than claiming the algorithm as original Nexus work.
+## Native engine in 0.2.1
 
-The C# port reads the real native cursor image and hotspot, caches each shape/tint, samples movement, interpolates cursor copies between points, applies speed-sensitive opacity and expires samples by age. Defaults match upstream: sensitivity 0.03, fade 50 ms, alpha 10 and white tint. It keeps the 500-sample bound and adds per-frame interpolation limits to avoid unbounded work after large pointer jumps. It clears when the cursor is hidden, stops for reduced motion, and never hides/replaces the real OS cursor. There is no C++ compiler/runtime installation requirement for this port.
+The C# rendering port from 0.2.0 has been removed. Nexus embeds the exact working `C:\Program Files\CursorBlur\CursorBlur.exe` supplied by qemvix (26,112 bytes, SHA-256 `1def15d2653a09c21826d430cab3a7c8f24778d385dd0e15177b786582207f2c`). The reference C++ source remains under `Upstream/CursorBlur.cpp`; provenance includes [qemvix/CursorBlur](https://github.com/qemvix/CursorBlur) and its upstream attribution.
 
-All shared overlays now use one `CompositionTarget.Rendering` subscription, rather than separate 12–30 FPS background timers. Settings offers 60, 90, 120, 144, 165 or 240 FPS targets. Fractional frame credit is preserved, so requesting 60 FPS on a 144 Hz clock does not accidentally round down to 48 FPS. Targets are not guarantees of frames actually presented by the monitor; the UI reports actual per-overlay drawing callback rates. Background load, capture cost, WPF composition and monitor refresh still apply.
+Enabling the module extracts/validates a versioned per-user cache and starts the original executable without arguments. Nexus assigns only its own child to a Windows job with KILL_ON_JOB_CLOSE. Disable, emergency pause, resource cleanup, host termination and uninstall release that job. An existing standalone CursorBlur is reported rather than adopted or killed. A stopped helper changes the module status to Faulted on the health tick.
 
-Cursor Lens no longer has its own 12 FPS/70 ms throttle. It samples once per shared frame on the pointer's monitor and reuses its capture surface and writable image, avoiding a new GDI bitmap/large pixel allocation per frame. Capture remains GDI-based and protected video/HDR/mixed-DPI behavior still needs hardware validation.
+CursorBlur has no schema/editor or Configure button. Native frame pacing, colors and motion remain the executable's defaults; WPF FPS and reduced-motion settings do not affect it. It is not included in WPF overlay frame metrics. Disable it when reduced motion is wanted.
 
-The local frame-clock test on the 144 Hz display observed approximately 58–61 rendered callbacks per second at a 60 FPS target, and 81 FPS during a 144 FPS target run. This validates improvement under that test load, not guaranteed 144/240 FPS or every effect combination. Cursor-image capture, sample lifetime/bounds and module cleanup have automated checks. A broader run with all effects enabled remains manual acceptance work.
+The imported executable depends on MSVCP140.dll, VCRUNTIME140.dll and VCRUNTIME140_1.dll. Nexus checks for those before launch; missing dependencies produce an error instead of an unusable Running state. See [Microsoft's supported Visual C++ runtime downloads](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist). The owner has this runtime installed. No runtime installer is silently downloaded or executed.
 
-References: [WPF per-frame rendering](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/graphics-multimedia/how-to-render-on-a-per-frame-interval-using-compositiontarget), [WPF rendering implementation](https://source.dot.net/presentationcore/System/Windows/Media/MediaContext.cs.html).
+## Nexus-rendered overlays
+
+Cursor Aura, ClickFX, Cursor Lens, FocusFade, ScreenRuler and KeyCast continue using the shared composition-synchronized WPF clock. Settings offers 60, 90, 120, 144, 165 and 240 FPS targets and measured callback rates. Actual presentation depends on monitor refresh, composition, capture cost and load. Targets are not guarantees.
+
+Cursor Lens samples once per shared frame on the pointer's monitor and reuses capture/image buffers. Protected video, HDR and mixed-DPI behavior still need hardware validation.
+
+Automated tests cover the bundled digest, altered-cache repair, duplicate prevention, start/stop, crashed-host cleanup and stopped-engine health reporting. Those tests establish lifecycle behavior; visual trail acceptance still depends on real input and the supplied executable's behavior.

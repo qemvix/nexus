@@ -6,3 +6,5 @@ artifacts/
 *.pfx
 *.key
 .tools/
+*.pem
+*.dpapi

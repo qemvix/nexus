@@ -6,6 +6,15 @@ namespace Nexus.Core;
 
 public static class Ui
 {
+    /// <summary>All geometry shares an exact center; text glyph baselines never position the logo.</summary>
+    public static Grid NexusOrbit()
+    {
+        var art = new Grid { Width = 235, Height = 176, Margin = new Thickness(15, 0, 0, 0), Name = "NexusOrbit" };
+        for (int i = 0; i < 4; i++) art.Children.Add(new System.Windows.Shapes.Ellipse { Name = "NexusRing" + i, Width = 62 + i * 38, Height = 62 + i * 38, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Stroke = Brush(i % 2 == 0 ? "#8D7CF0" : "#438A92"), StrokeThickness = i == 0 ? 8 : 1, Opacity = 1 - i * .18 });
+        art.Children.Add(new System.Windows.Shapes.Path { Name = "NexusDiamond", Width = 34, Height = 34, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Data = Geometry.Parse("M17,2 L32,17 L17,32 L2,17 Z"), Stroke = Brush("#DDD6FF"), StrokeThickness = 1.8 });
+        art.Children.Add(new System.Windows.Shapes.Path { Width = 34, Height = 34, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Data = Geometry.Parse("M17,6 L28,17 L17,28 L6,17 Z"), Fill = Brush("#DDD6FF") });
+        System.Windows.Automation.AutomationProperties.SetName(art, "Nexus emblem"); return art;
+    }
     public static FrameworkElement JsonEditor<T>(string label, T value, Action<T> apply)
     {
         var panel = new StackPanel(); panel.Children.Add(Text(label, 13));

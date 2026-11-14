@@ -15,6 +15,10 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        if (args.Length == 2 && args[0] == "--cursorblur-job-host")
+        {
+            using var engine = CursorBlurProcess.Start(); File.WriteAllText(args[1], engine.Id.ToString()); Thread.Sleep(30_000); return 0;
+        }
         if (args.Contains("--glide-integration"))
         {
             Nexus.Cursor.GlideBackend.Native.SetProcessDPIAware();
@@ -49,7 +53,9 @@ public static class Program
         Check("catalog has thirteen unique features", () => { var modules = Catalog(); Assert(modules.Length == 13 && modules.Select(x => x.Manifest.Id).Distinct().Count() == 13); foreach (var m in modules) m.Dispose(); });
         Check("overlay frame targets stay between 60 and 240", () => { Overlay.TargetFrameRate = 12; Assert(Overlay.TargetFrameRate == 60); Overlay.TargetFrameRate = 999; Assert(Overlay.TargetFrameRate == 240); Overlay.TargetFrameRate = 60; });
         Check("installer and hub embed the supplied Nexus license", () => { string text = Nexus.LicenseNotice.Text; Assert(text.Contains("Copyright (c) 2026 qemvix") && text.Contains("official Nexus releases") && text.Contains("desktop use") && !text.Contains("NoMiss") && !text.Contains("MIT License")); });
-        Check("CursorBlur samples expire and stay bounded", () => { var trail = new CursorTrail(); for (int i = 0; i < 1000; i++) trail.Add(i, 1, i / 100d, 1000); Assert(trail.Samples.Length == 500); trail.Add(1000, 1, 3000, 50); Assert(trail.Samples.Length == 1); trail.Clear(); Assert(trail.Samples.Length == 0); });
+        Check("CursorBlur embeds the exact native binary and has no configuration", () => { using var module = new CursorBlur(); Assert(!module.SupportsConfiguration && module.Schema.Count == 0); Assert(Convert.ToHexString(SHA256.HashData(CursorBlurProcess.ReadBundledEngine())).ToLowerInvariant() == CursorBlurProcess.ExpectedSha256); });
+        Check("CursorBlur repairs an altered extracted engine", () => WithDirectory(dir => { string file = CursorBlurProcess.PrepareEngine(dir); File.WriteAllText(file, "not the engine"); Assert(CursorBlurProcess.PrepareEngine(dir) == file); Assert(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(file))).ToLowerInvariant() == CursorBlurProcess.ExpectedSha256); }));
+        Check("missing native runtimes fail before launching a broken helper", () => { Throws<InvalidOperationException>(() => CursorBlurProcess.VerifyRuntime(_ => false)); CursorBlurProcess.VerifyRuntime(_ => true); });
         Check("every settings schema maps to a typed property", () => { foreach (var m in Catalog()) { foreach (var s in m.Schema) Assert(typeof(ModuleOptions).GetProperty(s.Key) is not null); m.Dispose(); } });
         Check("signed update accepted; tampering rejected", () =>
         {
@@ -59,6 +65,8 @@ public static class Program
             Throws<CryptographicException>(() => UpdateService.Verify(JsonSerializer.Serialize(new SignedRelease(payload.Replace("0.2.0", "9.9.9"), sign)), key));
         });
         Check("installer stages exactly one executable", () => WithDirectory(dir => { string file = Path.Combine(dir, "source.exe"); File.WriteAllText(file, "test-payload"); string destination = Path.Combine(dir, "install"); Nexus.Installer.InstallFiles(file, destination, false); Assert(File.ReadAllText(Path.Combine(destination, "Nexus.exe")) == "test-payload" && Directory.GetFiles(destination).Length == 1); }));
+        Check("installer upgrades an existing app without removing settings", () => WithDirectory(dir => { string source = Path.Combine(dir, "release.exe"), destination = Path.Combine(dir, "installed"); Directory.CreateDirectory(destination); File.WriteAllText(source, "new-release"); File.WriteAllText(Path.Combine(destination, "Nexus.exe"), "old-release"); File.WriteAllText(Path.Combine(destination, "user-data.json"), "keep"); Nexus.Installer.InstallFiles(source, destination, false); Assert(File.ReadAllText(Path.Combine(destination, "Nexus.exe")) == "new-release" && File.ReadAllText(Path.Combine(destination, "user-data.json")) == "keep" && !File.Exists(Path.Combine(destination, "Nexus.exe.new"))); }));
+        UpdateRegressionTests.Run(Check);
         Check("lifecycle blocks permissions and cleans failures", () => WithDirectory(dir =>
         {
             using var input = new InputService(); using var hotkeys = new HotkeyManager(); var c = new AppConfig(); var context = new ModuleContext(input, hotkeys, new(dir), () => true);
@@ -81,13 +89,40 @@ public static class Program
         var diagnostics = new Diagnostics(directory); var context = new ModuleContext(input, hotkeys, diagnostics, () => true, _ => false);
         var window = new System.Windows.Window { Title = "Nexus integration target", Width = 250, Height = 150, ShowInTaskbar = false, Content = new System.Windows.Controls.TextBlock { Text = "Nexus test target" } };
         window.Show();
-        Check("CursorBlur captures a native cursor image", () =>
+        Check("CursorBlur starts once and is stopped with its Nexus job", () =>
         {
-            var info = new CursorImageCache.CursorInfo { Size = System.Runtime.InteropServices.Marshal.SizeOf<CursorImageCache.CursorInfo>() };
-            nint handle = CursorImageCache.GetCursorInfo(ref info) ? info.Handle : 0;
-            if (handle == 0) { Console.WriteLine("Headless desktop: verify the stock Windows cursor bitmap instead of a missing live cursor."); handle = CursorImageCache.LoadCursor(0, new nint(32512)); }
-            Assert(handle != 0); var cache = new CursorImageCache(); cache.Refresh(handle, "#FFFFFF");
-            Assert(cache.Image is not null && cache.Image.PixelWidth > 0 && cache.Image.PixelHeight > 0); cache.Clear(); Assert(cache.Image is null);
+            using var engine = CursorBlurProcess.Start(); int pid = engine.Id; Assert(!engine.HasExited);
+            Throws<InvalidOperationException>(() => CursorBlurProcess.Start());
+            using var process = System.Diagnostics.Process.GetProcessById(pid); engine.Dispose(); engine.Dispose(); Assert(process.WaitForExit(3000));
+        });
+        Check("native engine exits become visible module faults", () =>
+        {
+            var config = new AppConfig { Grants = Capability.Mouse };
+            using var manager = new ModuleManager(config, context, () => { }); manager.Register(new CursorBlur()); manager.SetEnabled("cursor-blur", true);
+            var running = System.Diagnostics.Process.GetProcessesByName("CursorBlur");
+            try { Assert(running.Length == 1); running[0].Kill(); running[0].WaitForExit(3000); manager.CheckHealth(); Assert(manager.Entries[0].Status == ModuleStatus.Faulted && manager.Entries[0].Error.Length > 0); }
+            finally { foreach (var process in running) process.Dispose(); }
+        });
+        Check("CursorBlur cannot survive a crashed Nexus host", () => WithDirectory(dir =>
+        {
+            string pidFile = Path.Combine(dir, "child-pid.txt");
+            var start = new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false, CreateNoWindow = true };
+            start.ArgumentList.Add("--cursorblur-job-host"); start.ArgumentList.Add(pidFile);
+            using var host = System.Diagnostics.Process.Start(start)!;
+            try
+            {
+                var deadline = DateTime.UtcNow.AddSeconds(10); while (!File.Exists(pidFile) && DateTime.UtcNow < deadline && !host.HasExited) Thread.Sleep(40);
+                Assert(File.Exists(pidFile)); using var child = System.Diagnostics.Process.GetProcessById(int.Parse(File.ReadAllText(pidFile)));
+                host.Kill(); Assert(host.WaitForExit(3000) && child.WaitForExit(3000));
+            }
+            finally { if (!host.HasExited) { host.Kill(); host.WaitForExit(3000); } }
+        }));
+        Check("diamond and rings share a rendered center", () =>
+        {
+            var art = Ui.NexusOrbit(); var oldContent = window.Content; window.Content = art; window.UpdateLayout();
+            var ring = (System.Windows.FrameworkElement)art.Children[0]; var diamond = (System.Windows.FrameworkElement)art.Children[4];
+            var ringCenter = ring.TranslatePoint(new(ring.ActualWidth / 2, ring.ActualHeight / 2), art); var diamondCenter = diamond.TranslatePoint(new(diamond.ActualWidth / 2, diamond.ActualHeight / 2), art);
+            Console.WriteLine($"Orbit centers: ring {ringCenter}, diamond {diamondCenter}; sizes {ring.ActualWidth} / {diamond.ActualWidth}"); Assert((ringCenter - diamondCenter).Length < .01); window.Content = oldContent;
         });
         Check("composition clock renders overlays continuously", () =>
         {
@@ -130,6 +165,7 @@ public static class Program
                 Assert(app.Windows.Count == 1);
             });
         }
+        UiRegressionTests.Run(Check, directory);
         window.Close(); app.Shutdown();
         Directory.Delete(directory, true); Console.WriteLine($"{_passed} passed, {_failed} failed"); return _failed == 0 ? 0 : 1;
     }

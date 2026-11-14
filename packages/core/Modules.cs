@@ -4,6 +4,8 @@ public interface INexusModule : IDisposable
 {
     Manifest Manifest { get; }
     IReadOnlyList<Option> Schema { get; }
+    bool SupportsConfiguration => true;
+    string? RuntimeError => null;
     void Start(ModuleContext context, ModuleOptions options);
     void Stop();
     System.Windows.FrameworkElement? CreatePanel(ModuleOptions options) => null;
@@ -13,6 +15,8 @@ public abstract class NexusModule(Manifest manifest, params Option[] schema) : I
 {
     public Manifest Manifest { get; } = manifest;
     public IReadOnlyList<Option> Schema { get; } = schema;
+    public virtual bool SupportsConfiguration => true;
+    public virtual string? RuntimeError => null;
     protected ModuleContext Context { get; private set; } = null!;
     protected ModuleOptions Options { get; private set; } = null!;
     protected List<IDisposable> Resources { get; } = [];
@@ -85,6 +89,19 @@ public sealed class ModuleManager(AppConfig config, ModuleContext context, Actio
         }
     }
     public void RefreshAll() { foreach (var e in Entries) Refresh(e.Manifest.Id); save(); Changed?.Invoke(); }
+    public void CheckHealth()
+    {
+        bool changed = false;
+        foreach (var entry in Entries.Where(e => e.Status == ModuleStatus.Running))
+        {
+            string? error;
+            try { error = entry.Module.RuntimeError; } catch (Exception exception) { error = "Could not query the engine: " + exception.Message; }
+            if (error is null) continue;
+            entry.Module.Stop(); entry.Status = ModuleStatus.Faulted; entry.Error = error;
+            context.Diagnostics.Log(entry.Manifest.Id, new InvalidOperationException(error)); changed = true;
+        }
+        if (changed) Changed?.Invoke();
+    }
     public void PauseAll() { foreach (var e in Entries) { e.Module.Stop(); State(e.Manifest.Id).Enabled = false; e.Status = State(e.Manifest.Id).Installed ? ModuleStatus.Disabled : ModuleStatus.Available; } save(); Changed?.Invoke(); }
     public void Dispose() { foreach (var e in Entries) e.Module.Dispose(); GC.SuppressFinalize(this); }
 }

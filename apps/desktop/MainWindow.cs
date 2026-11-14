@@ -13,7 +13,7 @@ using Forms = System.Windows.Forms;
 
 namespace Nexus;
 
-public sealed class MainWindow : Window
+public sealed class MainWindow : Window, IDisposable
 {
     private readonly ConfigurationStore _store;
     private readonly AppConfig _config;
@@ -22,6 +22,7 @@ public sealed class MainWindow : Window
     private readonly HotkeyManager _hotkeys = new();
     private readonly ModuleManager _manager;
     private readonly List<IDisposable> _bindings = [];
+    private readonly List<Action> _moduleStatusRefreshers = [];
     private readonly Forms.NotifyIcon _tray;
     private readonly StackPanel _page = new();
     private readonly TextBlock _notice = Ui.Text("", 12, "#72E3CA");
@@ -32,26 +33,32 @@ public sealed class MainWindow : Window
     private readonly DispatcherTimer _updateTimer;
     private CancellationTokenSource _networkOperations = new();
     private bool _updateChecking;
+    private bool _updateDownloading;
+    private ReleaseInfo? _availableUpdate;
+    private string _updateMessage = "Check for a newer Nexus release.";
+    private TextBlock? _updateStatus;
+    private Button? _checkUpdateButton, _installUpdateButton;
     private string _section = "Overview";
     private bool _exiting;
 
-    public MainWindow(string directory, Diagnostics diagnostics)
+    public MainWindow(string directory, Diagnostics diagnostics, bool smoke = false)
     {
         _diagnostics = diagnostics; _store = new(directory); _config = _store.Load();
+        if (string.IsNullOrWhiteSpace(_config.UpdateUrl) && string.IsNullOrWhiteSpace(_config.UpdatePublicKey)) { _config.UpdateUrl = NexusRelease.ManifestUrl; _config.UpdatePublicKey = UpdatePublisher.PublicKey; }
         Overlay.TargetFrameRate = _config.OverlayFps;
         Title = "Nexus — Desktop, refined."; Width = 1180; Height = 880; MinWidth = 920; MinHeight = 640; WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Background = Ui.Brush("#0D0F19"); Foreground = Ui.Brush("#ECEAF7"); FontFamily = new FontFamily("Segoe UI");
-        Icon = BitmapFrame.Create(new Uri("pack://application:,,,/Assets/nexus.ico"));
+        Icon = BitmapFrame.Create(new Uri("pack://application:,,,/Nexus;component/Assets/nexus.ico"));
         var context = new ModuleContext(_input, _hotkeys, diagnostics, () => _config.ReducedMotion || !SystemParameters.ClientAreaAnimation, capability => (_config.Grants & capability) == capability);
         _manager = new(_config, context, Save);
         foreach (var module in CursorCatalog.Create().Concat(DesktopCatalog.Create()).Concat(ProductivityCatalog.Create())) _manager.Register(module);
-        _manager.Changed += UpdateTray;
-        BuildShell(); BindHotkeys();
-        using var iconStream = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,,/Assets/nexus.ico")).Stream;
+        _manager.Changed += () => { UpdateTray(); foreach (var refresh in _moduleStatusRefreshers) refresh(); };
+        BuildShell(); if (!smoke) BindHotkeys();
+        using var iconStream = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,,/Nexus;component/Assets/nexus.ico")).Stream;
         _tray = new Forms.NotifyIcon { Icon = new System.Drawing.Icon(iconStream), Text = "Nexus · desktop enhancement ecosystem", Visible = true };
         var menu = new Forms.ContextMenuStrip(); menu.Items.Add("Open Nexus", null, (_, _) => ShowHub()); menu.Items.Add("Pause all modules", null, (_, _) => { _manager.PauseAll(); Navigate(_section); }); menu.Items.Add("Exit Nexus", null, (_, _) => Exit());
         _tray.ContextMenuStrip = menu; _tray.DoubleClick += (_, _) => ShowHub();
-        _statsTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) }; _statsTimer.Tick += (_, _) => { _runtime.Text = Diagnostics.Summary(); if (_overlayMetrics is not null) _overlayMetrics.Text = Overlay.PerformanceSummary; }; _statsTimer.Start();
+        _statsTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) }; _statsTimer.Tick += (_, _) => { _manager.CheckHealth(); _runtime.Text = Diagnostics.Summary(); if (_overlayMetrics is not null) _overlayMetrics.Text = Overlay.PerformanceSummary; }; _statsTimer.Start();
         _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) }; _updateTimer.Tick += async (_, _) => await BackgroundUpdateCheck(); _updateTimer.Start();
         Dispatcher.BeginInvoke(async () => await BackgroundUpdateCheck());
         Navigate("Overview"); _notice.Text = _store.RecoveryMessage;
@@ -62,7 +69,7 @@ public sealed class MainWindow : Window
         var root = new Grid(); root.ColumnDefinitions.Add(new() { Width = new GridLength(222) }); root.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
         var rail = new DockPanel { Background = Ui.Brush("#10121E"), Margin = new Thickness(0, 0, 1, 0) }; var brand = new StackPanel { Margin = new Thickness(26, 28, 20, 0) }; DockPanel.SetDock(brand, Dock.Top);
         brand.Children.Add(Ui.Text("◈  nexus", 30)); brand.Children.Add(Ui.Text("DESKTOP, REFINED.", 10, "#9691B0")); brand.Children.Add(new Border { Height = 28 }); rail.Children.Add(brand);
-        var footer = new StackPanel { Margin = new Thickness(22) }; DockPanel.SetDock(footer, Dock.Bottom); footer.Children.Add(Ui.Text("NEXUS  /  0.2 PREVIEW", 10, "#9691B0")); footer.Children.Add(_runtime); rail.Children.Add(footer);
+        var footer = new StackPanel { Margin = new Thickness(22) }; DockPanel.SetDock(footer, Dock.Bottom); footer.Children.Add(Ui.Text($"NEXUS  /  {NexusRelease.Version} PREVIEW", 10, "#9691B0")); footer.Children.Add(_runtime); rail.Children.Add(footer);
         var nav = new StackPanel { Margin = new Thickness(14, 0, 8, 0) };
         foreach (var name in new[] { "Overview", "All modules", "Cursor & mouse", "Desktop", "Productivity", "Profiles", "Hotkeys", "Permissions", "Settings & updates" })
         {
@@ -77,7 +84,7 @@ public sealed class MainWindow : Window
     }
     private void Navigate(string section)
     {
-        _section = section; _page.Children.Clear();
+        _section = section; _moduleStatusRefreshers.Clear(); _page.Children.Clear();
         switch (section)
         {
             case "Overview": Overview(); break;
@@ -94,9 +101,7 @@ public sealed class MainWindow : Window
         Heading("Make your desktop yours.", "Thirteen native utilities. One quiet place to bring them together.");
         var hero = new Grid(); hero.ColumnDefinitions.Add(new()); hero.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         var intro = new StackPanel(); intro.Children.Add(Ui.Text("A LITTLE LESS FRICTION", 10, "#B8A8FF")); intro.Children.Add(Ui.Text("Find your flow.", 31)); intro.Children.Add(Ui.Text("Shape your cursor. Clear distractions.\nKeep useful controls within reach.", 14, "#C0BED6")); intro.Children.Add(Ui.Button("Explore your modules  →", () => Navigate("All modules"))); hero.Children.Add(intro);
-        var art = new Grid { Width = 235, Height = 175, Margin = new Thickness(15, 0, 0, 0) }; Grid.SetColumn(art, 1);
-        for (int i = 0; i < 4; i++) art.Children.Add(new System.Windows.Shapes.Ellipse { Width = 62 + i * 38, Height = 62 + i * 38, Stroke = Ui.Brush(i % 2 == 0 ? "#8D7CF0" : "#438A92"), StrokeThickness = i == 0 ? 8 : 1, Opacity = 1 - i * .18 });
-        art.Children.Add(new TextBlock { Text = "◈", FontSize = 36, Foreground = Ui.Brush("#DDD6FF"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }); hero.Children.Add(art);
+        var art = Ui.NexusOrbit(); Grid.SetColumn(art, 1); hero.Children.Add(art);
         var heroCard = Ui.Card(hero); heroCard.Background = new LinearGradientBrush(Color.FromRgb(38, 31, 67), Color.FromRgb(19, 35, 46), 20); heroCard.Padding = new Thickness(28); _page.Children.Add(heroCard);
         var stats = new System.Windows.Controls.Primitives.UniformGrid { Columns = 3, Margin = new Thickness(0, 4, 0, 12) };
         foreach (var (value, label) in new[] { (_manager.Entries.Count(e => e.Status == ModuleStatus.Running).ToString(), "MODULES ACTIVE"), (ModuleCount.ToString(), "WAYS TO REFINE"), ("Local", "PRIVATE BY DEFAULT") })
@@ -120,25 +125,31 @@ public sealed class MainWindow : Window
         var state = _manager.State(entry.Manifest.Id); var stack = new StackPanel();
         stack.Children.Add(Ui.Text(entry.Manifest.Category.ToUpperInvariant(), 10, "#9592AF")); stack.Children.Add(Ui.Text(entry.Manifest.Name, 22));
         stack.Children.Add(new TextBlock { Text = entry.Manifest.Description, TextWrapping = TextWrapping.Wrap, Foreground = Ui.Brush("#A6ACC5"), MinHeight = 58, FontSize = 13 });
-        stack.Children.Add(Ui.Text("●  " + entry.Status, 11, entry.Status == ModuleStatus.Running ? "#72E3CA" : "#B0A4DC"));
+        var statusText = Ui.Text("", 11); var errorText = Ui.Text("", 12, "#FFC58C");
+        void RefreshStatus() { statusText.Text = "●  " + entry.Status; statusText.Foreground = Ui.Brush(entry.Status == ModuleStatus.Running ? "#72E3CA" : "#B0A4DC"); errorText.Text = entry.Error; errorText.Visibility = entry.Error.Length == 0 ? Visibility.Collapsed : Visibility.Visible; }
+        _moduleStatusRefreshers.Add(RefreshStatus); RefreshStatus(); stack.Children.Add(statusText); stack.Children.Add(errorText);
         var actions = new WrapPanel(); actions.Children.Add(Ui.Button(state.Installed ? (state.Enabled ? "Disable" : "Enable") : "Install", () => Guard(() =>
         {
             if (!state.Installed) _manager.Install(entry.Manifest.Id, true); else _manager.SetEnabled(entry.Manifest.Id, !state.Enabled);
             Navigate(_section);
         })));
-        actions.Children.Add(Ui.Button("Configure", () => FeaturePage(entry))); stack.Children.Add(actions); return Ui.Card(stack);
+        if (entry.Module.SupportsConfiguration) actions.Children.Add(Ui.Button("Configure", () => FeaturePage(entry)));
+        else if (state.Installed) actions.Children.Add(Ui.Button("Uninstall feature", () => Guard(() => { _manager.Install(entry.Manifest.Id, false); Navigate(_section); })));
+        if (entry.Status == ModuleStatus.Blocked) actions.Children.Add(Ui.Button("Permissions", () => Navigate("Permissions")));
+        if (entry.Manifest.Id == "cursor-blur" && entry.Error.Contains("Visual C++")) actions.Children.Add(Ui.Button("Runtime help", () => Ui.Launch("https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist")));
+        stack.Children.Add(actions); return Ui.Card(stack);
     }
     private void FeaturePage(ModuleEntry entry)
     {
-        _page.Children.Clear(); var state = _manager.State(entry.Manifest.Id);
+        _moduleStatusRefreshers.Clear(); _page.Children.Clear(); var state = _manager.State(entry.Manifest.Id);
         Heading(entry.Manifest.Name, entry.Manifest.Description); _page.Children.Add(Ui.Text($"Status: {entry.Status}   ·   Capabilities: {entry.Manifest.Permissions}", 12, "#B5ACD8"));
         if (entry.Error.Length > 0) _page.Children.Add(Ui.Text(entry.Error, 13, "#FFC58C"));
-        var options = state.Options; var editor = new StackPanel();
+        var options = state.Options.Clone(); var editor = new StackPanel();
         foreach (var field in entry.Module.Schema) editor.Children.Add(OptionEditor(field, options));
         if (entry.Module.CreatePanel(options) is { } extra) editor.Children.Add(extra);
         if (editor.Children.Count > 0) _page.Children.Add(Ui.Card(editor));
         var buttons = new WrapPanel();
-        buttons.Children.Add(Ui.Button("Apply changes", () => Guard(() => { options.Validate(); _manager.Refresh(entry.Manifest.Id); Save(); FeaturePage(entry); _notice.Text = "Settings saved."; })));
+        buttons.Children.Add(Ui.Button("Apply changes", () => Guard(() => { options.Validate(); state.Options = options; _manager.Refresh(entry.Manifest.Id); Save(); FeaturePage(entry); _notice.Text = "Settings saved."; })));
         buttons.Children.Add(Ui.Button(state.Enabled ? "Disable module" : "Enable module", () => Guard(() => { _manager.SetEnabled(entry.Manifest.Id, !state.Enabled); FeaturePage(entry); })));
         buttons.Children.Add(Ui.Button(state.Installed ? "Uninstall feature" : "Install feature", () => Guard(() => { _manager.Install(entry.Manifest.Id, !state.Installed); FeaturePage(entry); })));
         buttons.Children.Add(Ui.Button("Back to library", () => Navigate("All modules"))); _page.Children.Add(buttons);
@@ -240,51 +251,95 @@ public sealed class MainWindow : Window
         rate.SelectionChanged += (_, _) => { if (rate.SelectedItem is int fps) { _config.OverlayFps = fps; Overlay.TargetFrameRate = fps; Save(); } }; _page.Children.Add(rate);
         _overlayMetrics = Ui.Text(Overlay.PerformanceSummary, 13, "#A6ACC5"); _page.Children.Add(_overlayMetrics);
         _page.Children.Add(Ui.Text("60 FPS by default; higher targets follow the display's composition cadence. Measured rendering can be lower under load or on a slower display.", 12, "#A6ACC5"));
-        _page.Children.Add(Ui.Text("Nexus 0.2.0 · native Windows / .NET 10\n" + Diagnostics.Summary() + "\nLast local error: " + _diagnostics.LastError, 13, "#A6ACC5"));
+        _page.Children.Add(Ui.Text($"Nexus {NexusRelease.Version} · native Windows / .NET 10\n" + Diagnostics.Summary() + "\nLast local error: " + _diagnostics.LastError, 13, "#A6ACC5"));
         _page.Children.Add(Ui.Button("Open local settings and diagnostics", () => Ui.Launch(_store.DirectoryPath)));
         _page.Children.Add(Ui.Button("View Nexus license", LicenseNotice.Show));
-        _page.Children.Add(Ui.Text("Signed updates", 22)); _page.Children.Add(Ui.Text("Publisher setup required: an HTTPS signed manifest and trusted RSA public key. No update server is configured in this preview.", 13, "#A6ACC5"));
-        var automatic = new CheckBox { Content = "Check automatically once per day (download and installation remain your choice)", IsChecked = _config.AutoCheckUpdates };
+        _page.Children.Add(Ui.Text("Nexus updates", 22));
+        _page.Children.Add(Ui.Text("Official releases are checked against the publisher's signature and the downloaded file's SHA-256. Updating replaces the app and keeps your settings. Portable copies receive a per-user installation.", 13, "#A6ACC5"));
+        _updateStatus = Ui.Text(_updateMessage, 15, "#72E3CA"); _page.Children.Add(_updateStatus);
+        _checkUpdateButton = Ui.Button("Check for updates", () => { });
+        _checkUpdateButton.Click += async (_, _) => await CheckForUpdates(false);
+        _installUpdateButton = Ui.Button("Download and install update", () => { });
+        _installUpdateButton.Click += async (_, _) => await InstallAvailableUpdate();
+        _page.Children.Add(_checkUpdateButton); _page.Children.Add(_installUpdateButton);
+        var automatic = new CheckBox { Content = "Check automatically once per day (installation remains your choice)", IsChecked = _config.AutoCheckUpdates };
         automatic.Click += (_, _) => { _config.AutoCheckUpdates = automatic.IsChecked == true; Save(); }; _page.Children.Add(automatic);
-        var url = new TextBox { Text = _config.UpdateUrl, Margin = new Thickness(0, 8, 0, 8) }; System.Windows.Automation.AutomationProperties.SetName(url, "Update manifest HTTPS URL"); _page.Children.Add(url);
-        var key = new TextBox { Text = _config.UpdatePublicKey, AcceptsReturn = true, MinHeight = 80, MaxHeight = 160, TextWrapping = TextWrapping.Wrap }; System.Windows.Automation.AutomationProperties.SetName(key, "Trusted RSA public key PEM"); _page.Children.Add(key);
-        var check = Ui.Button("Save and check for updates", () => { });
-        check.Click += async (_, _) =>
+        if ((_config.Grants & Capability.Network) == 0) _page.Children.Add(Ui.Button("Review network permission", () => Navigate("Permissions")));
+        _page.Children.Add(Ui.Text("CursorBlur uses its original native engine. Nexus's overlay frame target and reduced-motion controls apply to Nexus-rendered effects; disable CursorBlur to stop its motion.", 12, "#A6ACC5"));
+        var advanced = new StackPanel();
+        advanced.Children.Add(Ui.Text("The official feed and trusted public key are included. Change these only to use a publisher you trust. This signature is separate from a Windows Authenticode signature.", 12, "#A6ACC5"));
+        var url = new TextBox { Text = _config.UpdateUrl, Margin = new Thickness(0, 8, 0, 8) }; System.Windows.Automation.AutomationProperties.SetName(url, "Update manifest HTTPS URL"); advanced.Children.Add(url);
+        var key = new TextBox { Text = _config.UpdatePublicKey, AcceptsReturn = true, MinHeight = 80, MaxHeight = 160, TextWrapping = TextWrapping.Wrap }; System.Windows.Automation.AutomationProperties.SetName(key, "Trusted RSA public key PEM"); advanced.Children.Add(key);
+        advanced.Children.Add(Ui.Button("Save update source", () => Guard(() =>
         {
-            check.IsEnabled = false;
-            try
-            {
-                if ((_config.Grants & Capability.Network) == 0) throw new InvalidOperationException("Grant network access first.");
-                _config.UpdateUrl = url.Text.Trim(); _config.UpdatePublicKey = key.Text; Save();
-                var release = await UpdateService.Check(_config.UpdateUrl, _config.UpdatePublicKey, _networkOperations.Token);
-                _config.LastUpdateCheck = DateTimeOffset.UtcNow; Save();
-                if (Version.Parse(release.Version) <= new Version(0, 2, 0)) { _notice.Text = "You have the latest release."; return; }
-                if (MessageBox.Show($"Download verified Nexus {release.Version} and open its installer?", "Nexus update", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
-                string path = await UpdateService.Download(release, Path.Combine(_store.DirectoryPath, "updates"), _networkOperations.Token);
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path, "--install") { UseShellExecute = true }); Exit();
-            }
-            catch (Exception e) { _notice.Text = e.Message; _diagnostics.Log("updates", e); }
-            finally { check.IsEnabled = true; }
-        };
-        _page.Children.Add(check); _page.Children.Add(Ui.Button("Exit Nexus", Exit));
+            if (_updateChecking || _updateDownloading) throw new InvalidOperationException("Wait for the current update operation to finish.");
+            if (!Uri.TryCreate(url.Text.Trim(), UriKind.Absolute, out var uri) || uri.Scheme != "https") throw new InvalidDataException("Use an HTTPS manifest URL.");
+            using var rsa = System.Security.Cryptography.RSA.Create(); rsa.ImportFromPem(key.Text);
+            _config.UpdateUrl = uri.AbsoluteUri; _config.UpdatePublicKey = key.Text; _config.LastUpdateCheck = default; Save();
+            _availableUpdate = null; _updateMessage = "Update source saved. Check for a release when ready."; RefreshUpdateControls();
+        })));
+        _page.Children.Add(new Expander { Header = "Advanced update source", Content = advanced, Margin = new Thickness(0, 16, 0, 12) });
+        RefreshUpdateControls(); _page.Children.Add(Ui.Button("Exit Nexus", Exit));
     }
     private void Save() => _store.Save(_config);
+    private void RefreshUpdateControls()
+    {
+        if (_exiting) return;
+        if (_updateStatus is not null) _updateStatus.Text = _updateMessage;
+        if (_checkUpdateButton is not null) _checkUpdateButton.IsEnabled = !_updateChecking && !_updateDownloading;
+        if (_installUpdateButton is not null)
+        {
+            _installUpdateButton.Visibility = _availableUpdate is null ? Visibility.Collapsed : Visibility.Visible;
+            _installUpdateButton.IsEnabled = !_updateChecking && !_updateDownloading;
+            if (_availableUpdate is not null) _installUpdateButton.Content = "Download and install Nexus " + _availableUpdate.Version;
+        }
+    }
     private async Task BackgroundUpdateCheck()
     {
-        if (_exiting || _updateChecking || !_config.AutoCheckUpdates || (_config.Grants & Capability.Network) == 0 || string.IsNullOrWhiteSpace(_config.UpdateUrl) || string.IsNullOrWhiteSpace(_config.UpdatePublicKey)) return;
+        if (_exiting || _updateChecking || _updateDownloading || !_config.AutoCheckUpdates || (_config.Grants & Capability.Network) == 0) return;
         var elapsed = DateTimeOffset.UtcNow - _config.LastUpdateCheck;
         if (elapsed >= TimeSpan.Zero && elapsed < TimeSpan.FromDays(1)) return;
-        _updateChecking = true;
+        await CheckForUpdates(true);
+    }
+    private async Task CheckForUpdates(bool background)
+    {
+        if (_exiting || _updateChecking || _updateDownloading) return;
+        if ((_config.Grants & Capability.Network) == 0) { _updateMessage = "Allow network access on Permissions before checking for updates."; RefreshUpdateControls(); return; }
+        _updateChecking = true; _updateMessage = "Checking the signed Nexus release feed…"; RefreshUpdateControls();
+        var token = _networkOperations.Token;
         try
         {
-            // Record attempts too, so a broken/offline endpoint is never polled every minute.
+            // Failed attempts count too; an offline endpoint is never polled every minute.
             _config.LastUpdateCheck = DateTimeOffset.UtcNow; Save();
-            var release = await UpdateService.Check(_config.UpdateUrl, _config.UpdatePublicKey, _networkOperations.Token);
-            if (Version.Parse(release.Version) > new Version(0, 2, 0)) _notice.Text = $"Nexus {release.Version} is available. Open Settings & updates to review it.";
+            var release = await UpdateService.Check(_config.UpdateUrl, _config.UpdatePublicKey, token); token.ThrowIfCancellationRequested();
+            if (_exiting) return;
+            _availableUpdate = Version.Parse(release.Version) > NexusRelease.Current ? release : null;
+            _updateMessage = _availableUpdate is not null ? $"Nexus {release.Version} is available. Your settings will be kept." : $"You're up to date — Nexus {NexusRelease.Version}.";
+            if (_availableUpdate is not null) _notice.Text = $"Nexus {release.Version} is available. Open Settings & updates to install it.";
         }
-        catch (OperationCanceledException) { }
-        catch (Exception e) { _diagnostics.Log("update-check", e); }
-        finally { _updateChecking = false; }
+        catch (OperationCanceledException) { _availableUpdate = null; _updateMessage = "Update check cancelled."; }
+        catch (Exception exception) { _availableUpdate = null; _updateMessage = "Could not check for updates: " + exception.Message; _diagnostics.Log("update-check", exception); if (!background) _notice.Text = _updateMessage; }
+        finally { _updateChecking = false; RefreshUpdateControls(); }
+    }
+    private async Task InstallAvailableUpdate()
+    {
+        if (_exiting || _updateChecking || _updateDownloading || _availableUpdate is not { } release) return;
+        if ((_config.Grants & Capability.Network) == 0) { _updateMessage = "Allow network access on Permissions before downloading."; RefreshUpdateControls(); return; }
+        _updateDownloading = true; _updateMessage = "Preparing the verified update…"; RefreshUpdateControls();
+        var token = _networkOperations.Token;
+        try
+        {
+            var progress = new Progress<DownloadProgress>(value => { if (!_exiting) { _updateMessage = value.Description; RefreshUpdateControls(); } });
+            string path = await UpdateService.Download(release, Path.Combine(_store.DirectoryPath, "updates"), token, progress); token.ThrowIfCancellationRequested();
+            if (_exiting) return;
+            var start = new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = false, CreateNoWindow = true };
+            start.ArgumentList.Add("--apply-update"); start.ArgumentList.Add(Environment.ProcessId.ToString());
+            using var worker = System.Diagnostics.Process.Start(start) ?? throw new IOException("Windows could not start the update installer.");
+            Exit();
+        }
+        catch (OperationCanceledException) { _updateMessage = "Update download cancelled. Your current app was kept."; }
+        catch (Exception exception) { _updateMessage = "Update could not finish: " + exception.Message; _diagnostics.Log("update-install", exception); }
+        finally { _updateDownloading = false; RefreshUpdateControls(); }
     }
     private void Guard(Action action) { try { action(); } catch (Exception e) { _notice.Text = e.Message; _diagnostics.Log("action", e); } }
     private void UpdateTray() { if (_tray is not null) _tray.Text = $"Nexus · {_manager.Entries.Count(e => e.Status == ModuleStatus.Running)} modules active"; }
@@ -292,9 +347,14 @@ public sealed class MainWindow : Window
     private void OnClosing(object? sender, CancelEventArgs e) { if (!_exiting) { e.Cancel = true; Hide(); } }
     public void Exit()
     {
+        Dispose(); System.Windows.Application.Current.Shutdown();
+    }
+    public void Dispose()
+    {
         if (_exiting) return; _exiting = true; _statsTimer.Stop(); _updateTimer.Stop(); _networkOperations.Cancel(); _networkOperations.Dispose(); _manager.Dispose();
         foreach (var binding in _bindings) binding.Dispose(); _hotkeys.Dispose(); _input.Dispose(); _tray.Dispose();
-        Save(); Close(); System.Windows.Application.Current.Shutdown();
+        try { Save(); } catch (Exception exception) { _diagnostics.Log("shutdown-save", exception); }
+        Close(); GC.SuppressFinalize(this);
     }
     public void SaveScreenshot(string path)
     {
@@ -307,7 +367,7 @@ public sealed class MainWindow : Window
         {
             Navigate(section); UpdateLayout(); SaveScreenshot(Path.Combine(directory, "nexus-" + section.ToLowerInvariant().Replace(" & ", "-").Replace(' ', '-') + ".png"));
         }
-        foreach (var entry in _manager.Entries) { FeaturePage(entry); UpdateLayout(); }
+        foreach (var entry in _manager.Entries.Where(e => e.Module.SupportsConfiguration)) { FeaturePage(entry); UpdateLayout(); }
         Navigate("Overview"); UpdateLayout(); SaveScreenshot(Path.Combine(directory, "nexus-dashboard.png"));
     }
 }
