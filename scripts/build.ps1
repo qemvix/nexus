@@ -25,6 +25,7 @@ try {
         Copy-Item -LiteralPath artifacts/publish/Nexus.exe -Destination artifacts/release/Nexus.exe -Force
         $releaseVersion = ([xml](Get-Content -LiteralPath 'Directory.Build.props' -Raw)).Project.PropertyGroup.Version
         Compress-Archive -LiteralPath @('artifacts/release/Nexus.exe', 'LICENSE') -DestinationPath "artifacts/release/Nexus-$releaseVersion-win-x64-portable.zip" -Force
-        Get-ChildItem -LiteralPath artifacts/release -File | Where-Object Name -ne SHA256SUMS.txt | ForEach-Object { $hash = Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256; "$($hash.Hash.ToLowerInvariant())  $($_.Name)" } | Set-Content -LiteralPath artifacts/release/SHA256SUMS.txt
+        Copy-Item -LiteralPath LICENSE -Destination artifacts/release/Nexus-LICENSE.txt -Force
+        @('Nexus-Setup.exe', "Nexus-$releaseVersion-win-x64-portable.zip") | ForEach-Object { $hash = Get-FileHash -LiteralPath (Join-Path 'artifacts/release' $_) -Algorithm SHA256; "$($hash.Hash.ToLowerInvariant())  $_" } | Set-Content -LiteralPath artifacts/release/SHA256SUMS.txt -Encoding utf8NoBOM
     }
 } finally { Pop-Location }

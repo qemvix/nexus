@@ -12,7 +12,7 @@ public static class CursorCatalog
 {
     public static INexusModule[] Create() => [new CursorAura(), new ClickFx(), new ScrollFlow(), new CursorLens(), new CursorBlur()];
 }
-public sealed class CursorAura() : NexusModule(new("cursor-aura", "Cursor Aura", "Cursor & mouse", "Give your pointer a glow, soft halo, trail, particles or spotlight.", Capability.Mouse),
+public sealed class CursorAura() : NexusModule(new("cursor-aura", "Cursor Aura", "Cursor & mouse", "Glow, trails, particles and a spotlight around the pointer.", Capability.Mouse),
     new("Mode", "Effect", Choices: ["Glow", "Blur", "Trail", "Particles", "Spotlight"]), new("Size", "Radius", 16, 180), new("Intensity", "Opacity", .05, 1), new("Accent", "Accent color", IsText: true))
 {
     private readonly Queue<(int X, int Y)> _trail = [];
@@ -53,7 +53,7 @@ public sealed class CursorAura() : NexusModule(new("cursor-aura", "Cursor Aura",
         }
     }
 }
-public sealed class ClickFx() : NexusModule(new("click-fx", "ClickFX", "Cursor & mouse", "Distinct left and right click ripples, rings and shockwaves.", Capability.Mouse),
+public sealed class ClickFx() : NexusModule(new("click-fx", "ClickFX", "Cursor & mouse", "Visible ripples, rings and shockwaves for mouse clicks.", Capability.Mouse),
     new("Mode", "Animation", Choices: ["Ripple", "Rings", "Shockwave"]), new("Size", "Maximum radius", 16, 180), new("Duration", "Duration (seconds)", .1, 2), new("Sound", "Play system click sound", IsToggle: true), new("Accent", "Left click color", IsText: true))
 {
     private readonly List<(int X, int Y, bool Right, long Time)> _clicks = [];

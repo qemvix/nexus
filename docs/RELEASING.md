@@ -9,3 +9,8 @@ The publisher private key is DPAPI-encrypted at %LOCALAPPDATA%\NexusPublisher\up
 Manifest signing authenticates update metadata and SHA-256; it is separate from Authenticode. These preview binaries remain unsigned by Windows publisher signing. No unattended installation, cloud signing service or automatic rollback is included. Portable updates create/update a per-user installed copy. The worker waits for the old process, stages the fixed install target, preserves local settings and relaunches the hub.
 
 CI builds/tests and packages the app; signed feed publication is a separate publisher operation requiring the protected key. Official application releases and the desktop monorepo are qemvix/nexus. Website source is qemvix/NexusApp. Nexus remains proprietary regardless of repository visibility.
+## GitHub-built releases from 0.2.2
+
+The Windows workflow runs the build, unit/native tests, formatting check and packaged screenshot capture on GitHub. A separate job creates a verified draft for a new application version in qemvix/nexus. Existing published assets are immutable and are never overwritten by a later documentation/feed build. The draft is published only after review and update-feed signing.
+
+The workflow emits a small release-metadata artifact and a separate screenshot artifact. The publisher can sign a trusted, verified remote installer digest with `scripts/sign-release.ps1 -Sha256 <digest> -Url <official-installer-url> -Version <version> -Output <manifest>`. Only use a digest checked against the successful build's uploaded release asset. No private signing key is sent to GitHub Actions. This avoids downloading and rebuilding the installer on the publisher's PC.

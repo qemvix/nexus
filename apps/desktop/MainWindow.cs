@@ -23,6 +23,10 @@ public sealed class MainWindow : Window, IDisposable
     private readonly ModuleManager _manager;
     private readonly List<IDisposable> _bindings = [];
     private readonly List<Action> _moduleStatusRefreshers = [];
+    private readonly List<Action> _overviewRefreshers = [];
+    private readonly Dictionary<string, Button> _navigation = [];
+    private readonly TextBlock _activity = Ui.Text("0 modules running", 12, "#A9B1C1");
+    private ScrollViewer? _pageScroller;
     private readonly Forms.NotifyIcon _tray;
     private readonly StackPanel _page = new();
     private readonly TextBlock _notice = Ui.Text("", 12, "#72E3CA");
@@ -46,16 +50,16 @@ public sealed class MainWindow : Window, IDisposable
         _diagnostics = diagnostics; _store = new(directory); _config = _store.Load();
         if (string.IsNullOrWhiteSpace(_config.UpdateUrl) && string.IsNullOrWhiteSpace(_config.UpdatePublicKey)) { _config.UpdateUrl = NexusRelease.ManifestUrl; _config.UpdatePublicKey = UpdatePublisher.PublicKey; }
         Overlay.TargetFrameRate = _config.OverlayFps;
-        Title = "Nexus — Desktop, refined."; Width = 1180; Height = 880; MinWidth = 920; MinHeight = 640; WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        Title = "Nexus"; Width = 1180; Height = 880; MinWidth = 920; MinHeight = 640; WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Background = Ui.Brush("#0D0F19"); Foreground = Ui.Brush("#ECEAF7"); FontFamily = new FontFamily("Segoe UI");
         Icon = BitmapFrame.Create(new Uri("pack://application:,,,/Nexus;component/Assets/nexus.ico"));
         var context = new ModuleContext(_input, _hotkeys, diagnostics, () => _config.ReducedMotion || !SystemParameters.ClientAreaAnimation, capability => (_config.Grants & capability) == capability);
         _manager = new(_config, context, Save);
         foreach (var module in CursorCatalog.Create().Concat(DesktopCatalog.Create()).Concat(ProductivityCatalog.Create())) _manager.Register(module);
-        _manager.Changed += () => { UpdateTray(); foreach (var refresh in _moduleStatusRefreshers) refresh(); };
+        _manager.Changed += () => { UpdateTray(); foreach (var refresh in _moduleStatusRefreshers) refresh(); foreach (var refresh in _overviewRefreshers) refresh(); _activity.Text = $"{_manager.Entries.Count(e => e.Status == ModuleStatus.Running)} modules running"; };
         BuildShell(); if (!smoke) BindHotkeys();
         using var iconStream = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,,/Nexus;component/Assets/nexus.ico")).Stream;
-        _tray = new Forms.NotifyIcon { Icon = new System.Drawing.Icon(iconStream), Text = "Nexus · desktop enhancement ecosystem", Visible = true };
+        _tray = new Forms.NotifyIcon { Icon = new System.Drawing.Icon(iconStream), Text = "Nexus", Visible = true };
         var menu = new Forms.ContextMenuStrip(); menu.Items.Add("Open Nexus", null, (_, _) => ShowHub()); menu.Items.Add("Pause all modules", null, (_, _) => { _manager.PauseAll(); Navigate(_section); }); menu.Items.Add("Exit Nexus", null, (_, _) => Exit());
         _tray.ContextMenuStrip = menu; _tray.DoubleClick += (_, _) => ShowHub();
         _statsTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) }; _statsTimer.Tick += (_, _) => { _manager.CheckHealth(); _runtime.Text = Diagnostics.Summary(); if (_overlayMetrics is not null) _overlayMetrics.Text = Overlay.PerformanceSummary; }; _statsTimer.Start();
@@ -66,25 +70,34 @@ public sealed class MainWindow : Window, IDisposable
     }
     private void BuildShell()
     {
-        var root = new Grid(); root.ColumnDefinitions.Add(new() { Width = new GridLength(222) }); root.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
-        var rail = new DockPanel { Background = Ui.Brush("#10121E"), Margin = new Thickness(0, 0, 1, 0) }; var brand = new StackPanel { Margin = new Thickness(26, 28, 20, 0) }; DockPanel.SetDock(brand, Dock.Top);
-        brand.Children.Add(Ui.Text("◈  nexus", 30)); brand.Children.Add(Ui.Text("DESKTOP, REFINED.", 10, "#9691B0")); brand.Children.Add(new Border { Height = 28 }); rail.Children.Add(brand);
-        var footer = new StackPanel { Margin = new Thickness(22) }; DockPanel.SetDock(footer, Dock.Bottom); footer.Children.Add(Ui.Text($"NEXUS  /  {NexusRelease.Version} PREVIEW", 10, "#9691B0")); footer.Children.Add(_runtime); rail.Children.Add(footer);
-        var nav = new StackPanel { Margin = new Thickness(14, 0, 8, 0) };
+        var root = new Grid(); root.ColumnDefinitions.Add(new() { Width = new GridLength(210) }); root.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
+        var rail = new DockPanel { Background = Ui.Brush("#11151F"), Margin = new Thickness(0, 0, 1, 0) };
+        var brand = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(24, 26, 20, 26) }; DockPanel.SetDock(brand, Dock.Top);
+        brand.Children.Add(Ui.NexusMark()); brand.Children.Add(new TextBlock { Text = "Nexus", FontSize = 24, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center }); rail.Children.Add(brand);
+        var footer = new StackPanel { Margin = new Thickness(22) }; DockPanel.SetDock(footer, Dock.Bottom);
+        footer.Children.Add(Ui.Text($"Version {NexusRelease.Version}", 11, "#A9B1C1")); footer.Children.Add(_runtime); rail.Children.Add(footer);
+        var nav = new StackPanel { Margin = new Thickness(12, 0, 12, 0) };
         foreach (var name in new[] { "Overview", "All modules", "Cursor & mouse", "Desktop", "Productivity", "Profiles", "Hotkeys", "Permissions", "Settings & updates" })
         {
-            var button = Ui.Button(name, () => Navigate(name)); button.HorizontalContentAlignment = HorizontalAlignment.Left; button.BorderThickness = new Thickness(0); button.Background = Brushes.Transparent; button.Padding = new Thickness(14, 12, 8, 12); nav.Children.Add(button);
+            var button = Ui.Button(name, () => Navigate(name)); button.HorizontalContentAlignment = HorizontalAlignment.Left; button.BorderThickness = new Thickness(1); button.BorderBrush = Brushes.Transparent; button.Background = Brushes.Transparent; button.Padding = new Thickness(12, 10, 8, 10); button.Margin = new Thickness(0, 2, 0, 2);
+            _navigation.Add(name, button); nav.Children.Add(button);
         }
         rail.Children.Add(nav); root.Children.Add(rail);
-        var body = new DockPanel { Margin = new Thickness(34, 26, 32, 20) }; Grid.SetColumn(body, 1);
-        var top = new Grid { Margin = new Thickness(0, 0, 0, 22) }; DockPanel.SetDock(top, Dock.Top); top.ColumnDefinitions.Add(new()); top.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        top.Children.Add(Ui.Text("WORKSPACE  /  PERSONAL", 11, "#8F97B3")); var pause = Ui.Button("Pause all  ·  Ctrl+Alt+P", () => { _manager.PauseAll(); Navigate(_section); }); Grid.SetColumn(pause, 1); top.Children.Add(pause); body.Children.Add(top);
+        var body = new DockPanel { Margin = new Thickness(30, 22, 26, 18) }; Grid.SetColumn(body, 1);
+        var top = new Grid { Margin = new Thickness(0, 0, 0, 20) }; DockPanel.SetDock(top, Dock.Top); top.ColumnDefinitions.Add(new()); top.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        _activity.Margin = new Thickness(0); _activity.VerticalAlignment = VerticalAlignment.Center; top.Children.Add(_activity);
+        var pause = Ui.Button("Pause all  ·  Ctrl+Alt+P", () => { _manager.PauseAll(); Navigate(_section); }); Grid.SetColumn(pause, 1); top.Children.Add(pause); body.Children.Add(top);
         DockPanel.SetDock(_notice, Dock.Bottom); body.Children.Add(_notice);
-        body.Children.Add(new ScrollViewer { Content = _page, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled }); root.Children.Add(body); Content = root;
+        _pageScroller = new ScrollViewer { Content = _page, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled }; body.Children.Add(_pageScroller); root.Children.Add(body); Content = root;
     }
     private void Navigate(string section)
     {
-        _section = section; _moduleStatusRefreshers.Clear(); _page.Children.Clear();
+        _section = section; _moduleStatusRefreshers.Clear(); _overviewRefreshers.Clear(); _page.Children.Clear(); _pageScroller?.ScrollToTop();
+        foreach (var (name, button) in _navigation)
+        {
+            bool selected = name == section; button.Background = selected ? Ui.Brush("#252A3B") : Brushes.Transparent; button.BorderBrush = selected ? Ui.Brush("#424961") : Brushes.Transparent; button.Foreground = Ui.Brush(selected ? "#F0EEFA" : "#AFB7C8");
+            System.Windows.Automation.AutomationProperties.SetItemStatus(button, selected ? "Current page" : "");
+        }
         switch (section)
         {
             case "Overview": Overview(); break;
@@ -95,27 +108,31 @@ public sealed class MainWindow : Window, IDisposable
             default: ModulesPage(section == "All modules" ? null : section); break;
         }
     }
-    private void Heading(string title, string subtitle) { _page.Children.Add(Ui.Text(title, 30)); _page.Children.Add(Ui.Text(subtitle, 14, "#A6ACC5")); _page.Children.Add(new Border { Height = 12 }); }
+    private void Heading(string title, string subtitle) { _page.Children.Add(Ui.Text(title, 28)); _page.Children.Add(Ui.Text(subtitle, 14, "#A6ACC5")); _page.Children.Add(new Border { Height = 8 }); }
     private void Overview()
     {
-        Heading("Make your desktop yours.", "Thirteen native utilities. One quiet place to bring them together.");
-        var hero = new Grid(); hero.ColumnDefinitions.Add(new()); hero.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        var intro = new StackPanel(); intro.Children.Add(Ui.Text("A LITTLE LESS FRICTION", 10, "#B8A8FF")); intro.Children.Add(Ui.Text("Find your flow.", 31)); intro.Children.Add(Ui.Text("Shape your cursor. Clear distractions.\nKeep useful controls within reach.", 14, "#C0BED6")); intro.Children.Add(Ui.Button("Explore your modules  →", () => Navigate("All modules"))); hero.Children.Add(intro);
-        var art = Ui.NexusOrbit(); Grid.SetColumn(art, 1); hero.Children.Add(art);
-        var heroCard = Ui.Card(hero); heroCard.Background = new LinearGradientBrush(Color.FromRgb(38, 31, 67), Color.FromRgb(19, 35, 46), 20); heroCard.Padding = new Thickness(28); _page.Children.Add(heroCard);
-        var stats = new System.Windows.Controls.Primitives.UniformGrid { Columns = 3, Margin = new Thickness(0, 4, 0, 12) };
-        foreach (var (value, label) in new[] { (_manager.Entries.Count(e => e.Status == ModuleStatus.Running).ToString(), "MODULES ACTIVE"), (ModuleCount.ToString(), "WAYS TO REFINE"), ("Local", "PRIVATE BY DEFAULT") })
+        Heading("Overview", "Module status and common actions.");
+        var stats = new System.Windows.Controls.Primitives.UniformGrid { Columns = 3, Margin = new Thickness(0, 2, 0, 20) };
+        foreach (var item in new (string Label, Func<int> Count)[] {
+            ("Running", () => _manager.Entries.Count(e => e.Status == ModuleStatus.Running)),
+            ("Need permission", () => _manager.Entries.Count(e => e.Status == ModuleStatus.Blocked)),
+            ("Installed", () => _manager.Entries.Count(e => _manager.State(e.Manifest.Id).Installed)) })
         {
-            var column = new StackPanel(); column.Children.Add(Ui.Text(value, 26, "#C1B4FF")); column.Children.Add(Ui.Text(label, 10, "#A6ACC5")); var card = Ui.Card(column); card.Margin = new Thickness(0, 0, 12, 0); stats.Children.Add(card);
+            var column = new StackPanel(); var value = Ui.Text(item.Count().ToString(), 27); column.Children.Add(value); column.Children.Add(Ui.Text(item.Label, 12, "#A9B1C1"));
+            _overviewRefreshers.Add(() => value.Text = item.Count().ToString()); var card = Ui.Card(column); card.Margin = new Thickness(0, 0, 10, 0); stats.Children.Add(card);
         }
-        _page.Children.Add(stats); _page.Children.Add(Ui.Text("START WITH SOMETHING SMALL", 11, "#9CA4BE"));
+        _page.Children.Add(stats);
+        var library = new StackPanel(); library.Children.Add(Ui.Text("Module library", 19)); library.Children.Add(Ui.Text("Enable utilities, change settings, and review access requirements.", 13, "#A9B1C1"));
+        var actions = new WrapPanel(); actions.Children.Add(Ui.Button("Open modules", () => Navigate("All modules"))); actions.Children.Add(Ui.Button("Permissions", () => Navigate("Permissions"))); library.Children.Add(actions); _page.Children.Add(Ui.Card(library));
+        _page.Children.Add(Ui.Text("Quick access", 18));
         var row = new System.Windows.Controls.Primitives.UniformGrid { Columns = 2 };
-        foreach (string id in new[] { "cursor-aura", "focus-fade" }) { var card = ModuleCard(_manager.Entries.Single(e => e.Manifest.Id == id)); card.Margin = new Thickness(0, 0, 12, 12); row.Children.Add(card); }
+        foreach (string id in new[] { "scroll-flow", "cursor-blur" }) { var card = ModuleCard(_manager.Entries.Single(e => e.Manifest.Id == id)); card.Margin = new Thickness(0, 0, 10, 12); row.Children.Add(card); }
         _page.Children.Add(row);
+        _page.Children.Add(Ui.Text("Ctrl+Alt+N opens Nexus. Ctrl+Alt+P stops all modules. Closing this window keeps Nexus in the tray.", 12, "#A9B1C1"));
     }
     private void ModulesPage(string? category)
     {
-        Heading(category ?? "Your module library", "Install what you need. Enable it when it helps. Everything starts disabled.");
+        Heading(category ?? "Modules", "Enable, disable, and configure utilities.");
         var grid = new System.Windows.Controls.Primitives.UniformGrid { Columns = 2 };
         foreach (var entry in _manager.Entries.Where(e => category is null || e.Manifest.Category == category)) { var card = ModuleCard(entry); card.Margin = new Thickness(0, 0, 12, 12); grid.Children.Add(card); }
         _page.Children.Add(grid);
@@ -123,8 +140,8 @@ public sealed class MainWindow : Window, IDisposable
     private Border ModuleCard(ModuleEntry entry)
     {
         var state = _manager.State(entry.Manifest.Id); var stack = new StackPanel();
-        stack.Children.Add(Ui.Text(entry.Manifest.Category.ToUpperInvariant(), 10, "#9592AF")); stack.Children.Add(Ui.Text(entry.Manifest.Name, 22));
-        stack.Children.Add(new TextBlock { Text = entry.Manifest.Description, TextWrapping = TextWrapping.Wrap, Foreground = Ui.Brush("#A6ACC5"), MinHeight = 58, FontSize = 13 });
+        stack.Children.Add(Ui.Text(entry.Manifest.Category, 11, "#9592AF")); stack.Children.Add(Ui.Text(entry.Manifest.Name, 20));
+        stack.Children.Add(new TextBlock { Text = entry.Manifest.Description, TextWrapping = TextWrapping.Wrap, Foreground = Ui.Brush("#A6ACC5"), MinHeight = 42, FontSize = 13 });
         var statusText = Ui.Text("", 11); var errorText = Ui.Text("", 12, "#FFC58C");
         void RefreshStatus() { statusText.Text = "●  " + entry.Status; statusText.Foreground = Ui.Brush(entry.Status == ModuleStatus.Running ? "#72E3CA" : "#B0A4DC"); errorText.Text = entry.Error; errorText.Visibility = entry.Error.Length == 0 ? Visibility.Collapsed : Visibility.Visible; }
         _moduleStatusRefreshers.Add(RefreshStatus); RefreshStatus(); stack.Children.Add(statusText); stack.Children.Add(errorText);
@@ -141,7 +158,7 @@ public sealed class MainWindow : Window, IDisposable
     }
     private void FeaturePage(ModuleEntry entry)
     {
-        _moduleStatusRefreshers.Clear(); _page.Children.Clear(); var state = _manager.State(entry.Manifest.Id);
+        _moduleStatusRefreshers.Clear(); _overviewRefreshers.Clear(); _page.Children.Clear(); _pageScroller?.ScrollToTop(); var state = _manager.State(entry.Manifest.Id);
         Heading(entry.Manifest.Name, entry.Manifest.Description); _page.Children.Add(Ui.Text($"Status: {entry.Status}   ·   Capabilities: {entry.Manifest.Permissions}", 12, "#B5ACD8"));
         if (entry.Error.Length > 0) _page.Children.Add(Ui.Text(entry.Error, 13, "#FFC58C"));
         var options = state.Options.Clone(); var editor = new StackPanel();
@@ -182,7 +199,7 @@ public sealed class MainWindow : Window, IDisposable
     }
     private void ProfilesPage()
     {
-        Heading("Profiles", "Save a workspace and switch it in one step. Exports contain settings, never clipboard history or grants.");
+        Heading("Profiles", "Save and switch module settings. Exports exclude clipboard history and permissions.");
         var name = new TextBox { Text = "My workspace", MaxLength = 80, Margin = new Thickness(0, 0, 0, 10) }; System.Windows.Automation.AutomationProperties.SetName(name, "Profile name"); _page.Children.Add(name);
         _page.Children.Add(Ui.Button("Save current profile", () => Guard(() =>
         {
@@ -227,7 +244,7 @@ public sealed class MainWindow : Window, IDisposable
     }
     private void PermissionsPage()
     {
-        Heading("You are in control.", "These grants control Nexus features. They are not an operating-system sandbox for third-party code.");
+        Heading("Permissions", "Allow the capabilities required by the modules you use.");
         foreach (var (capability, description) in new[] { (Capability.Mouse, "Observe mouse activity and transform wheel events"), (Capability.Keyboard, "Show keystrokes in KeyCast — may expose typed information on screen"), (Capability.Screen, "Capture screen pixels for magnification and color picking"), (Capability.Clipboard, "Collect clipboard text in memory while ClipVault is enabled"), (Capability.Windows, "Move, dim or change the opacity of other windows"), (Capability.Network, "Fetch weather and check or download signed updates") })
         {
             var check = new CheckBox { Content = new TextBlock { Text = description, TextWrapping = TextWrapping.Wrap }, IsChecked = (_config.Grants & capability) == capability };
@@ -243,7 +260,7 @@ public sealed class MainWindow : Window, IDisposable
     }
     private void SettingsPage()
     {
-        Heading("Quiet by design.", "Local configuration, deliberate network access, and no telemetry service.");
+        Heading("Settings", "Application preferences, rendering and updates.");
         var motion = new CheckBox { Content = "Reduce motion (Windows accessibility preference is also respected)", IsChecked = _config.ReducedMotion }; motion.Click += (_, _) => { _config.ReducedMotion = motion.IsChecked == true; Save(); }; _page.Children.Add(Ui.Card(motion));
         _page.Children.Add(Ui.Text("Overlay rendering", 22));
         var rate = new ComboBox { ItemsSource = new[] { 60, 90, 120, 144, 165, 240 }, SelectedItem = _config.OverlayFps, Margin = new Thickness(0, 4, 0, 12) };
@@ -358,7 +375,8 @@ public sealed class MainWindow : Window, IDisposable
     }
     public void SaveScreenshot(string path)
     {
-        var bitmap = new RenderTargetBitmap((int)ActualWidth, (int)ActualHeight, 96, 96, PixelFormats.Pbgra32); bitmap.Render(this);
+        var surface = (FrameworkElement)Content;
+        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(surface.ActualWidth), (int)Math.Ceiling(surface.ActualHeight), 96, 96, PixelFormats.Pbgra32); bitmap.Render(surface);
         var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(bitmap)); using var stream = File.Create(path); png.Save(stream);
     }
     public void SaveScreenGallery(string directory)

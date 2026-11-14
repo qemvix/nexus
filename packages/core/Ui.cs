@@ -6,14 +6,13 @@ namespace Nexus.Core;
 
 public static class Ui
 {
-    /// <summary>All geometry shares an exact center; text glyph baselines never position the logo.</summary>
-    public static Grid NexusOrbit()
+    /// <summary>Small vector mark; circle and diamond share a center without font metrics.</summary>
+    public static Grid NexusMark()
     {
-        var art = new Grid { Width = 235, Height = 176, Margin = new Thickness(15, 0, 0, 0), Name = "NexusOrbit" };
-        for (int i = 0; i < 4; i++) art.Children.Add(new System.Windows.Shapes.Ellipse { Name = "NexusRing" + i, Width = 62 + i * 38, Height = 62 + i * 38, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Stroke = Brush(i % 2 == 0 ? "#8D7CF0" : "#438A92"), StrokeThickness = i == 0 ? 8 : 1, Opacity = 1 - i * .18 });
-        art.Children.Add(new System.Windows.Shapes.Path { Name = "NexusDiamond", Width = 34, Height = 34, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Data = Geometry.Parse("M17,2 L32,17 L17,32 L2,17 Z"), Stroke = Brush("#DDD6FF"), StrokeThickness = 1.8 });
-        art.Children.Add(new System.Windows.Shapes.Path { Width = 34, Height = 34, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Data = Geometry.Parse("M17,6 L28,17 L17,28 L6,17 Z"), Fill = Brush("#DDD6FF") });
-        System.Windows.Automation.AutomationProperties.SetName(art, "Nexus emblem"); return art;
+        var mark = new Grid { Width = 28, Height = 28 };
+        mark.Children.Add(new System.Windows.Shapes.Ellipse { Width = 26, Height = 26, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Stroke = Brush("#778197"), StrokeThickness = 1 });
+        mark.Children.Add(new System.Windows.Shapes.Path { Width = 20, Height = 20, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Data = Geometry.Parse("M10,2 L18,10 L10,18 L2,10 Z"), Fill = Brush("#C4B5F3") });
+        System.Windows.Automation.AutomationProperties.SetName(mark, "Nexus"); return mark;
     }
     public static FrameworkElement JsonEditor<T>(string label, T value, Action<T> apply)
     {
@@ -31,10 +30,10 @@ public static class Ui
     public static TextBlock Text(string text, double size = 14, string color = "#ECEAF7") => new() { Text = text, FontSize = size, Foreground = Brush(color), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) };
     public static Button Button(string text, Action action)
     {
-        var button = new Button { Content = text, Margin = new Thickness(0, 3, 8, 3), Padding = new Thickness(14, 9, 14, 9), MinHeight = 36 };
+        var button = new Button { Content = text, Margin = new Thickness(0, 3, 8, 3), Padding = new Thickness(13, 8, 13, 8), MinHeight = 36 };
         System.Windows.Automation.AutomationProperties.SetName(button, text); button.Click += (_, _) => action(); return button;
     }
-    public static Border Card(UIElement content) => new() { Background = Brush("#171A28"), BorderBrush = Brush("#2C3044"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(14), Padding = new Thickness(20), Margin = new Thickness(0, 0, 0, 14), Child = content };
+    public static Border Card(UIElement content) => new() { Background = new LinearGradientBrush(Color.FromRgb(25, 30, 43), Color.FromRgb(21, 26, 37), 90), BorderBrush = Brush("#333B4D"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Padding = new Thickness(18), Margin = new Thickness(0, 0, 0, 14), Child = content };
     public static Window Floating(string title, UIElement content, double width = 310, double height = 240)
     {
         var window = new Window { Title = "Nexus · " + title, Width = width, Height = height, MinWidth = 230, MinHeight = 130, Topmost = true, ShowInTaskbar = false, Background = Brush("#111320"), Foreground = Brush("#ECEAF7"), FontFamily = new FontFamily("Segoe UI"), Content = new Border { Padding = new Thickness(18), Child = content }, WindowStartupLocation = WindowStartupLocation.CenterScreen };

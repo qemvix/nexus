@@ -2,7 +2,7 @@ name: Windows build and release
 on:
   push:
     branches: [main]
-    tags: ['v*']
+    tags: ['v*', 'desktop-v*']
   pull_request:
   workflow_dispatch:
 permissions:
@@ -10,17 +10,18 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - name: Build, type-check, unit tests and publish
+      - name: Build, unit and native integration checks
         shell: pwsh
         run: ./scripts/build.ps1 -Publish -Integration
       - name: Formatting and whitespace
         run: dotnet format Nexus.sln --verify-no-changes --no-restore
-      - name: Native startup smoke
+      - name: Native startup and UI captures
         shell: pwsh
         run: |
           $folder = Join-Path $PWD artifacts/smoke
@@ -30,21 +31,33 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: nexus-windows-x64
-          path: |
-            artifacts/release/*
-            artifacts/smoke/nexus-dashboard.png
-  release:
-    if: startsWith(github.ref, 'refs/tags/')
+          path: artifacts/release/
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexus-ui-screenshots
+          path: artifacts/smoke/*.png
+          retention-days: 14
+  stage-release:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: windows
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: nexus-windows-x64
-          path: release
-      - name: Create draft release for review
+          path: artifacts/release
+      - name: Prepare verified release draft
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create '${{ github.ref_name }}' --repo '${{ github.repository }}' --draft --title 'Nexus ${{ github.ref_name }}' --notes 'Unsigned Windows preview. See the README feature matrix and release checklist.' $(find release -type f)
+        run: ./scripts/prepare-release.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexus-release-metadata
+          path: artifacts/release-metadata.json
+          if-no-files-found: ignore
+          retention-days: 14

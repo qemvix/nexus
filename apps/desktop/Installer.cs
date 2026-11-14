@@ -15,7 +15,7 @@ public static class Installer
     private const string RegistryPath = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\Nexus";
     public static void ShowInstall()
     {
-        var panel = new StackPanel(); panel.Children.Add(Ui.Text("◈  nexus", 34)); panel.Children.Add(Ui.Text("Your desktop, refined.", 21));
+        var panel = new StackPanel(); var brand = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 20) }; brand.Children.Add(Ui.NexusMark()); brand.Children.Add(Ui.Text("Nexus", 28)); panel.Children.Add(brand);
         panel.Children.Add(Ui.Text("Install the complete Nexus hub and module library for your Windows account.\n\nNo administrator access, startup entry or network connection is required. All features start disabled.\n\nLocation: " + InstallDirectory, 14, "#B4BAD1"));
         var status = Ui.Text("", 13, "#72E3CA"); panel.Children.Add(status);
         var window = new Window { Title = "Install Nexus", Width = 560, Height = 600, ResizeMode = ResizeMode.NoResize, WindowStartupLocation = WindowStartupLocation.CenterScreen, Content = new Border { Padding = new Thickness(32), Child = panel } };
@@ -48,7 +48,7 @@ public static class Installer
         Directory.CreateDirectory(Path.GetDirectoryName(Shortcut)!);
         var type = Type.GetTypeFromProgID("WScript.Shell") ?? throw new InvalidOperationException("Windows shortcut service unavailable.");
         dynamic shell = Activator.CreateInstance(type)!; dynamic shortcut = shell.CreateShortcut(Shortcut);
-        try { shortcut.TargetPath = target; shortcut.WorkingDirectory = destination; shortcut.Description = "Nexus desktop enhancement ecosystem"; shortcut.Save(); }
+        try { shortcut.TargetPath = target; shortcut.WorkingDirectory = destination; shortcut.Description = "Nexus desktop utilities"; shortcut.Save(); }
         finally { Marshal.FinalReleaseComObject(shortcut); Marshal.FinalReleaseComObject(shell); }
         using var key = Registry.CurrentUser.CreateSubKey(RegistryPath);
         key.SetValue("DisplayName", "Nexus"); key.SetValue("DisplayVersion", NexusRelease.Version); key.SetValue("Publisher", "qemvix"); key.SetValue("InstallLocation", destination);

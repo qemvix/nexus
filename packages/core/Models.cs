@@ -6,7 +6,7 @@ namespace Nexus.Core;
 [Flags]
 public enum Capability { None = 0, Mouse = 1, Keyboard = 2, Screen = 4, Clipboard = 8, Windows = 16, Network = 32 }
 public enum ModuleStatus { Available, Disabled, Running, Blocked, Faulted }
-public sealed record Manifest(string Id, string Name, string Category, string Description, Capability Permissions, int ApiVersion = 1, string Version = "0.2.1");
+public sealed record Manifest(string Id, string Name, string Category, string Description, Capability Permissions, int ApiVersion = 1, string Version = "0.2.2");
 public sealed record Option(string Key, string Label, double Min = 0, double Max = 100, string[]? Choices = null, bool IsText = false, bool IsToggle = false);
 public sealed record ScrollProfile(string Process, double Sensitivity = 1, bool Invert = false, double Momentum = 0.75, int? GlideMilliseconds = null);
 public sealed record WindowZone(double X, double Y, double Width, double Height);

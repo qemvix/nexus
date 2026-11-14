@@ -83,7 +83,7 @@ public static class Program
     private static INexusModule[] Catalog() => CursorCatalog.Create().Concat(DesktopCatalog.Create()).Concat(ProductivityCatalog.Create()).ToArray();
     private static int Integration()
     {
-        var app = new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
+        var app = new Nexus.App { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown }; app.InitializeComponent();
         string directory = Path.Combine(Path.GetTempPath(), "nexus-integration-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(directory);
         using var input = new InputService(); using var hotkeys = new HotkeyManager();
         var diagnostics = new Diagnostics(directory); var context = new ModuleContext(input, hotkeys, diagnostics, () => true, _ => false);
@@ -117,10 +117,10 @@ public static class Program
             }
             finally { if (!host.HasExited) { host.Kill(); host.WaitForExit(3000); } }
         }));
-        Check("diamond and rings share a rendered center", () =>
+        Check("brand mark geometry shares a rendered center", () =>
         {
-            var art = Ui.NexusOrbit(); var oldContent = window.Content; window.Content = art; window.UpdateLayout();
-            var ring = (System.Windows.FrameworkElement)art.Children[0]; var diamond = (System.Windows.FrameworkElement)art.Children[4];
+            var art = Ui.NexusMark(); var oldContent = window.Content; window.Content = art; window.UpdateLayout();
+            var ring = (System.Windows.FrameworkElement)art.Children[0]; var diamond = (System.Windows.FrameworkElement)art.Children[1];
             var ringCenter = ring.TranslatePoint(new(ring.ActualWidth / 2, ring.ActualHeight / 2), art); var diamondCenter = diamond.TranslatePoint(new(diamond.ActualWidth / 2, diamond.ActualHeight / 2), art);
             Console.WriteLine($"Orbit centers: ring {ringCenter}, diamond {diamondCenter}; sizes {ring.ActualWidth} / {diamond.ActualWidth}"); Assert((ringCenter - diamondCenter).Length < .01); window.Content = oldContent;
         });

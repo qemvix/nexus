@@ -1,5 +1,6 @@
 param(
-    [Parameter(Mandatory)][string]$Binary,
+    [string]$Binary = '',
+    [string]$Sha256 = '',
     [Parameter(Mandatory)][string]$Url,
     [string]$PrivateKeyFile = '',
     [string]$ProtectedKeyFile = (Join-Path $env:LOCALAPPDATA 'NexusPublisher/update-signing-key.dpapi'),
@@ -9,7 +10,10 @@ param(
 $ErrorActionPreference = 'Stop'
 if (-not $Url.StartsWith('https://')) { throw 'An HTTPS release URL is required' }
 if (-not $Version) { $Version = ([xml](Get-Content -LiteralPath (Join-Path $PSScriptRoot '../Directory.Build.props') -Raw)).Project.PropertyGroup.Version }
-$digest = (Get-FileHash -LiteralPath $Binary -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($Binary -and $Sha256) { throw 'Provide a binary or a verified SHA-256 digest, not both' }
+if ($Binary) { $digest = (Get-FileHash -LiteralPath $Binary -Algorithm SHA256).Hash.ToLowerInvariant() }
+elseif ($Sha256 -match '^[a-fA-F0-9]{64}$') { $digest = $Sha256.ToLowerInvariant() }
+else { throw 'A binary path or verified SHA-256 digest is required' }
 $payload = [ordered]@{ Version = $Version; Url = $Url; Sha256 = $digest } | ConvertTo-Json -Compress
 $rsa = [System.Security.Cryptography.RSA]::Create()
 $secret = $null
