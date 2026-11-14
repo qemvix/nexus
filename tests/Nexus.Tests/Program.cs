@@ -83,7 +83,7 @@ public static class Program
     private static INexusModule[] Catalog() => CursorCatalog.Create().Concat(DesktopCatalog.Create()).Concat(ProductivityCatalog.Create()).ToArray();
     private static int Integration()
     {
-        var app = new Nexus.App { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown }; app.InitializeComponent();
+        var app = new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown }; app.Resources.MergedDictionaries.Add(new System.Windows.ResourceDictionary { Source = new Uri("pack://application:,,,/Nexus;component/Theme.xaml") });
         string directory = Path.Combine(Path.GetTempPath(), "nexus-integration-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(directory);
         using var input = new InputService(); using var hotkeys = new HotkeyManager();
         var diagnostics = new Diagnostics(directory); var context = new ModuleContext(input, hotkeys, diagnostics, () => true, _ => false);
