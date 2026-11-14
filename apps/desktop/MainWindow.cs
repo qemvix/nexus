@@ -70,7 +70,7 @@ public sealed class MainWindow : Window, IDisposable
     }
     private void BuildShell()
     {
-        var root = new Grid(); root.ColumnDefinitions.Add(new() { Width = new GridLength(210) }); root.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
+        var root = new Grid { Background = Background }; root.ColumnDefinitions.Add(new() { Width = new GridLength(210) }); root.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
         var rail = new DockPanel { Background = Ui.Brush("#11151F"), Margin = new Thickness(0, 0, 1, 0) };
         var brand = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(24, 26, 20, 26) }; DockPanel.SetDock(brand, Dock.Top);
         brand.Children.Add(Ui.NexusMark()); brand.Children.Add(new TextBlock { Text = "Nexus", FontSize = 24, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center }); rail.Children.Add(brand);
@@ -79,7 +79,7 @@ public sealed class MainWindow : Window, IDisposable
         var nav = new StackPanel { Margin = new Thickness(12, 0, 12, 0) };
         foreach (var name in new[] { "Overview", "All modules", "Cursor & mouse", "Desktop", "Productivity", "Profiles", "Hotkeys", "Permissions", "Settings & updates" })
         {
-            var button = Ui.Button(name, () => Navigate(name)); button.HorizontalContentAlignment = HorizontalAlignment.Left; button.BorderThickness = new Thickness(1); button.BorderBrush = Brushes.Transparent; button.Background = Brushes.Transparent; button.Padding = new Thickness(12, 10, 8, 10); button.Margin = new Thickness(0, 2, 0, 2);
+            var button = Ui.Button(name, () => Navigate(name)); button.HorizontalAlignment = HorizontalAlignment.Stretch; button.HorizontalContentAlignment = HorizontalAlignment.Left; button.BorderThickness = new Thickness(1); button.BorderBrush = Brushes.Transparent; button.Background = Brushes.Transparent; button.Padding = new Thickness(12, 10, 8, 10); button.Margin = new Thickness(0, 2, 0, 2);
             _navigation.Add(name, button); nav.Children.Add(button);
         }
         rail.Children.Add(nav); root.Children.Add(rail);

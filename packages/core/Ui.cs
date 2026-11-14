@@ -30,7 +30,7 @@ public static class Ui
     public static TextBlock Text(string text, double size = 14, string color = "#ECEAF7") => new() { Text = text, FontSize = size, Foreground = Brush(color), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) };
     public static Button Button(string text, Action action)
     {
-        var button = new Button { Content = text, Margin = new Thickness(0, 3, 8, 3), Padding = new Thickness(13, 8, 13, 8), MinHeight = 36 };
+        var button = new Button { Content = text, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 3, 8, 3), Padding = new Thickness(13, 8, 13, 8), MinHeight = 36 };
         System.Windows.Automation.AutomationProperties.SetName(button, text); button.Click += (_, _) => action(); return button;
     }
     public static Border Card(UIElement content) => new() { Background = new LinearGradientBrush(Color.FromRgb(25, 30, 43), Color.FromRgb(21, 26, 37), 90), BorderBrush = Brush("#333B4D"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Padding = new Thickness(18), Margin = new Thickness(0, 0, 0, 14), Child = content };
