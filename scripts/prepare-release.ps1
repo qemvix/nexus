@@ -21,13 +21,15 @@ foreach($name in $names){
 $remote = @(gh api ('repos/'+$Repository+'/releases?per_page=100') | ConvertFrom-Json) | ForEach-Object { $_ } | Where-Object tag_name -eq $tag | Select-Object -First 1
 if($LASTEXITCODE -or -not $remote){throw 'Could not verify release draft'}
 if(@($remote.assets).Count -ne 4){throw 'Unexpected release assets'}
+$null = gh api --method PATCH ('repos/'+$Repository+'/releases/'+$remote.id) -f ('target_commitish='+$env:GITHUB_SHA)
+if($LASTEXITCODE){throw 'Could not record the tested source commit'}
 $files=@{}
 foreach($name in $names){
     $local=Get-Item -LiteralPath (Join-Path $releaseDir $name)
     $digest=(Get-FileHash -LiteralPath $local.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
     $asset=$remote.assets | Where-Object name -eq $name
     if(-not $asset -or $asset.size -ne $local.Length -or $asset.digest -ne ('sha256:'+$digest)){throw ('Uploaded asset mismatch: '+$name)}
-    $files[$name]=@{bytes=$local.Length;sha256=$digest;url=$asset.browser_download_url}
+    $files[$name]=@{bytes=$local.Length;sha256=$digest;url=("https://github.com/$Repository/releases/download/$tag/$name")}
 }
 @{version=$version;tag=$tag;repository=$Repository;releaseId=$remote.id;files=$files} | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $root 'artifacts/release-metadata.json') -Encoding utf8NoBOM
 Write-Output ('Verified release draft: '+$remote.html_url)
