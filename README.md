@@ -2,7 +2,7 @@
 
 # Nexus
 
-[Private GitHub monorepo](https://github.com/qemvix/nexus) · [Builds](https://github.com/qemvix/nexus/actions)
+[GitHub monorepo](https://github.com/qemvix/nexus) · [Builds](https://github.com/qemvix/nexus/actions)
 
 **Desktop, refined.** A native Windows utility ecosystem with one hub, one installer and thirteen independently controlled features. Built with C# / .NET 10 and WPF; no web view, cloud account or subscription dependency.
 
@@ -12,7 +12,7 @@
 
 ## Install or run
 
-Download `Nexus-Setup.exe` from the [official public release](https://github.com/qemvix/NexusApp/releases/tag/desktop-v0.2.1), or use the locally supplied installer. Open it and choose **Install Nexus**. It installs for the current account in `%LOCALAPPDATA%\Programs\Nexus`, creates a Start-menu shortcut, and registers with Windows Installed Apps. No administrator elevation or automatic startup entry is requested.
+Download `Nexus-Setup.exe` from the [official public release](https://github.com/qemvix/nexus/releases/tag/desktop-v0.2.1), or use the locally supplied installer. Open it and choose **Install Nexus**. It installs for the current account in `%LOCALAPPDATA%\Programs\Nexus`, creates a Start-menu shortcut, and registers with Windows Installed Apps. No administrator elevation or automatic startup entry is requested.
 
 For portable use, extract `Nexus-0.2.1-win-x64-portable.zip` and open `Nexus.exe`. Both distributions are self-contained: the end user does not need to install .NET. The 26 KB CursorBlur engine is embedded as a verified native resource. Build the complete Nexus release with the command below.
 
