@@ -18,8 +18,8 @@ foreach($name in $names){
     gh release upload $tag (Join-Path $releaseDir $name) --repo $Repository --clobber
     if($LASTEXITCODE){throw ('Release upload failed: '+$name)}
 }
-$remote=gh api ('repos/'+$Repository+'/releases/tags/'+$tag) | ConvertFrom-Json
-if($LASTEXITCODE){throw 'Could not verify release draft'}
+$remote = @(gh api ('repos/'+$Repository+'/releases?per_page=100') | ConvertFrom-Json) | ForEach-Object { $_ } | Where-Object tag_name -eq $tag | Select-Object -First 1
+if($LASTEXITCODE -or -not $remote){throw 'Could not verify release draft'}
 if(@($remote.assets).Count -ne 4){throw 'Unexpected release assets'}
 $files=@{}
 foreach($name in $names){
